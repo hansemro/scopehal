@@ -294,6 +294,7 @@ void SiglentSCPIOscilloscope::IdentifyHardware()
 	//Look up model info
 	m_modelid = MODEL_UNKNOWN;
 	m_maxBandwidth = 0;
+	m_requireSizeWorkaround = false;
 
 	if(m_vendor.compare("Siglent Technologies") == 0)
 	{
@@ -335,6 +336,15 @@ void SiglentSCPIOscilloscope::IdentifyHardware()
 				m_maxBandwidth = 350;
 			if(m_model.compare(4, 1, "5") == 0)
 				m_maxBandwidth = 500;
+
+			//Check if version requires size workaround (1.3.9R6 and older)
+			if(m_fwVersion.compare(4, 4, "1.3.") == 0)
+				//1.3.9R10 and 1.3.9R12 do not require size workaround.
+				if((m_fwVersion.compare(8, 4, "9R10") != 0) && (m_fwVersion.compare(8, 4, "9R12") != 0))
+				{
+					m_requireSizeWorkaround = true;
+					LogTrace("Current firmware (%s) requires size workaround\n", m_fwVersion.c_str());
+				}
 
 			//TODO: check for whether we actually have the license
 			//(no SCPI command for this yet)
@@ -2049,9 +2059,7 @@ bool SiglentSCPIOscilloscope::AcquireData()
 				//BUG: When SDS2000X+ (tested on 1.3.9R6) is in 10-bit mode, the SCPI length header reports the size of the data blob in
 				//16-bit words, rather than bytes!
 				//2000X+ HD running firmware 1.1.7.0 seems to be unaffected.
-				bool hdWorkaround = false;
-				if( (m_modelid == MODEL_SIGLENT_SDS2000XP) && m_highDefinition)
-					hdWorkaround = true;
+				bool hdWorkaround = m_requireSizeWorkaround && m_highDefinition;
 
 				//Read the data from each analog waveform
 				for(unsigned int i = 0; i < m_analogChannelCount; i++)
