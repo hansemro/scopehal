@@ -402,9 +402,78 @@ void SiglentSCPIOscilloscope::IdentifyHardware()
 
 void SiglentSCPIOscilloscope::DetectOptions()
 {
-	//AddDigitalChannels(16);
+	LogDebug("Detecting options\n");
 
-	/* SDS2000XP has no capability to find the options :-( */
+	string reply;
+	switch(m_modelid)
+	{
+		// --------------------------------------------------
+		case MODEL_SIGLENT_SDS1000:
+		case MODEL_SIGLENT_SDS2000XE:
+			//TODO
+			break;
+		// --------------------------------------------------
+		case MODEL_SIGLENT_SDS2000XP:
+			/* SDS2000XP FW 1.3.X has no capability to find licensed options */
+			if(m_fwVersion.compare(4, 4, "1.3.") == 0)
+			{
+				LogDebug("Firmware version must be 1.5.2R1 or newer to check licensed options\n");
+				break;
+			}
+			//fallthrough
+		case MODEL_SIGLENT_SDS2000X_HD:
+		case MODEL_SIGLENT_SDS5000X:
+		case MODEL_SIGLENT_SDS6000A:
+			{
+				reply = Trim(converse("*OPT?"));
+				vector<string> options;
+				stringstream s_stream(reply);
+				while(s_stream.good())
+				{
+					string opt;
+					getline(s_stream, opt, ',');
+					if(opt != "0")
+						options.push_back(opt);
+				}
+
+				//FG,16LA,FlexRay,CANFD,I2S,1553B,PA,SENT,Manch
+				for(auto o : options)
+				{
+					string type = "Unknown";
+					string desc = "Unknown";
+					string action = "Ignoring";
+
+					if(o == "FG")
+					{
+						type = "Hardware";
+						desc = "Function generator";
+						action = "Enabled";
+						m_hasFunctionGen = true;
+					}
+					else if((o == "16LA") && !m_hasLA)
+					{
+						type = "Hardware";
+						desc = "16-channel logic analyzer";
+						action = "Enabled";
+						AddDigitalChannels(16);
+					}
+					else
+					{
+						type = "Trig/Decode";
+						desc = o;
+					}
+
+
+					LogDebug("* %-20s %-25s %-35s %-20s\n", o.c_str(), type.c_str(), desc.c_str(), action.c_str());
+				}
+			}
+			break;
+		// --------------------------------------------------
+		default:
+			LogError("Unknown scope type\n");
+			break;
+			// --------------------------------------------------
+	}
 	return;
 }
 
@@ -414,6 +483,7 @@ void SiglentSCPIOscilloscope::DetectOptions()
 
 void SiglentSCPIOscilloscope::AddDigitalChannels(unsigned int count)
 {
+	m_hasLA = true;
 	m_digitalChannelCount = count;
 	m_digitalChannelBase = m_channels.size();
 
