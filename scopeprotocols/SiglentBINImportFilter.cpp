@@ -270,7 +270,7 @@ void SiglentBINImportFilter::OnFileNameChanged()
 			wfm->PrepareForCpuAccess();
 			SetData(wfm, m_streams.size() - 1);
 
-			LogDebug("%s Waveform\n", name.c_str());
+			LogDebug("Waveform[%d]: %s\n", wave_idx, name.c_str());
 			double v_gain = analog_ch[i].v_gain * analog_ch[i].probe_factor / analog_ch[i].codes_per_div;
 			LogDebug("\tv_gain: %f\n", v_gain);
 			LogDebug("\tcenter: %d\n", center_code);
@@ -304,7 +304,6 @@ void SiglentBINImportFilter::OnFileNameChanged()
 	}
 
 	//Process math data
-	wave_idx = 0;
 	for(int i = 0; i < 4; i++)
 	{
 		if(math_ch[i].enabled)
@@ -320,7 +319,7 @@ void SiglentBINImportFilter::OnFileNameChanged()
 			wfm->PrepareForCpuAccess();
 			SetData(wfm, m_streams.size() - 1);
 
-			LogDebug("%s Waveform\n", name.c_str());
+			LogDebug("Waveform[%d]: %s\n", wave_idx, name.c_str());
 			double v_gain = math_ch[i].v_gain / math_ch[i].codes_per_div;
 			LogDebug("\tv_gain: %f\n", v_gain);
 			LogDebug("\tcenter: %d\n", center_code);
