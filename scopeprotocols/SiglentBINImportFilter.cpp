@@ -248,7 +248,6 @@ void SiglentBINImportFilter::OnFileNameChanged()
 
 	//Process analog data
 	uint32_t data_width = wh.data_width + 1; // number of bytes
-	uint32_t data_length = data_width * wh.wave_length; // length of waveform data in bytes
 	uint32_t center_code = (1 << (8*data_width - 1)) - 1;
 
 	uint32_t wave_idx = 0;
@@ -267,14 +266,7 @@ void SiglentBINImportFilter::OnFileNameChanged()
 			wfm->PrepareForCpuAccess();
 			SetData(wfm, m_streams.size() - 1);
 
-			LogDebug("timescale: %f\n", FS_PER_SECOND / wh.s_rate);
-			LogDebug("timestamp : %f\n", timestamp * FS_PER_SECOND);
-
 			LogDebug("%s Waveform\n", name.c_str());
-			uint32_t start = wave_idx * data_length + fpos;
-			uint32_t end = start + data_length;
-			LogDebug("\tstart: %d\n", start);
-			LogDebug("\tend: %d\n", end);
 			double v_gain = analog_ch[i].v_gain * analog_ch[i].probe_factor / analog_ch[i].codes_per_div;
 			LogDebug("\tv_gain: %f\n", v_gain);
 			LogDebug("\tcenter: %d\n", center_code);
@@ -284,10 +276,7 @@ void SiglentBINImportFilter::OnFileNameChanged()
 				for(size_t j = 0; j < wh.wave_length; j++)
 				{
 					uint16_t* sample = (uint16_t*)(f.c_str() + fpos);
-					//LogDebug("\tfpos: %d\n", fpos);
-					//LogDebug("\tsample[%ld]: %d\n", j, *sample);
 					float value = (((int32_t)*sample - (int32_t)center_code)) * v_gain - analog_ch[i].v_offset;
-					//LogDebug("\tvalue[%ld]: %f\n", j, value);
 					wfm->m_samples.push_back(value);
 					fpos += 2;
 				}
@@ -297,10 +286,7 @@ void SiglentBINImportFilter::OnFileNameChanged()
 				for(size_t j = 0; j < wh.wave_length; j++)
 				{
 					uint8_t* sample = (uint8_t*)(f.c_str() + fpos);
-					//LogDebug("\tfpos: %d\n", fpos);
-					//LogDebug("\tsample[%ld]: %d\n", j, *sample);
 					float value = ((int16_t)*sample - (int16_t)center_code) * v_gain - analog_ch[i].v_offset;
-					//LogDebug("\tvalue[%ld]: %f\n", j, value);
 					wfm->m_samples.push_back(value);
 					fpos += 1;
 				}
