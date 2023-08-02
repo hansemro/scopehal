@@ -351,13 +351,42 @@ void SiglentBINImportFilter::OnFileNameChanged()
 		}
 	}
 
-	//TODO: Process digital data
-	wave_idx = 0;
+	//Process digital data
 	if(wh.digital_en)
 	{
 		for(int i = 0; i < 16; i++)
 		{
-			wave_idx += 1;
+			if(wh.d_ch_en[i])
+			{
+				string name = string("D") + to_string(i);
+
+				AddStream(Unit(Unit::UNIT_VOLTS), name, Stream::STREAM_TYPE_DIGITAL);
+
+				auto wfm = new UniformDigitalWaveform;
+				wfm->m_timescale = FS_PER_SECOND / wh.d_s_rate;
+				wfm->m_startTimestamp = timestamp * FS_PER_SECOND;
+				wfm->m_startFemtoseconds = fs;
+				wfm->m_triggerPhase = 0;
+				wfm->PrepareForCpuAccess();
+				SetData(wfm, m_streams.size() - 1);
+
+				LogDebug("Waveform[%d]: %s\n", wave_idx, name.c_str());
+				for(size_t j = 0; j < (wh.d_wave_length / 8); j++)
+				{
+					uint8_t samples = *(uint8_t*)(f.c_str() + fpos);
+					for(int k = 0; k < 8; k++)
+					{
+						bool value = samples & 0x1;
+						samples >>= 1;
+						wfm->m_samples.push_back(value);
+					}
+					fpos += 1;
+				}
+
+				wfm->MarkModifiedFromCpu();
+				AutoscaleVertical(wave_idx);
+				wave_idx += 1;
+			}
 		}
 	}
 
