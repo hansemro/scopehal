@@ -137,6 +137,7 @@ void SiglentBINImportFilter::OnFileNameChanged()
 			1,
 			wh.math1_v_gain,
 			wh.math1_v_offset,
+			wh.math1_s_period,
 			wh.math_codes_per_div,
 			wh.math1_en == 1,
 		},
@@ -144,6 +145,7 @@ void SiglentBINImportFilter::OnFileNameChanged()
 			2,
 			wh.math2_v_gain,
 			wh.math2_v_offset,
+			wh.math2_s_period,
 			wh.math_codes_per_div,
 			wh.math2_en == 1,
 		},
@@ -151,6 +153,7 @@ void SiglentBINImportFilter::OnFileNameChanged()
 			3,
 			wh.math3_v_gain,
 			wh.math3_v_offset,
+			wh.math3_s_period,
 			wh.math_codes_per_div,
 			wh.math3_en == 1,
 		},
@@ -158,6 +161,7 @@ void SiglentBINImportFilter::OnFileNameChanged()
 			4,
 			wh.math4_v_gain,
 			wh.math4_v_offset,
+			wh.math4_s_period,
 			wh.math_codes_per_div,
 			wh.math4_en == 1,
 		}
@@ -299,12 +303,51 @@ void SiglentBINImportFilter::OnFileNameChanged()
 		}
 	}
 
-	//TODO: Process math data
+	//Process math data
 	wave_idx = 0;
 	for(int i = 0; i < 4; i++)
 	{
 		if(math_ch[i].enabled)
 		{
+			string name = string("Math") + to_string(i+1);
+
+			AddStream(Unit(Unit::UNIT_VOLTS), name, Stream::STREAM_TYPE_ANALOG);
+			auto wfm = new UniformAnalogWaveform;
+			wfm->m_timescale = math_ch[i].s_period * FS_PER_SECOND;
+			wfm->m_startTimestamp = timestamp * FS_PER_SECOND;
+			wfm->m_startFemtoseconds = fs;
+			wfm->m_triggerPhase = 0;
+			wfm->PrepareForCpuAccess();
+			SetData(wfm, m_streams.size() - 1);
+
+			LogDebug("%s Waveform\n", name.c_str());
+			double v_gain = math_ch[i].v_gain / math_ch[i].codes_per_div;
+			LogDebug("\tv_gain: %f\n", v_gain);
+			LogDebug("\tcenter: %d\n", center_code);
+
+			if(data_width == 2)
+			{
+				for(size_t j = 0; j < wh.wave_length; j++)
+				{
+					uint16_t* sample = (uint16_t*)(f.c_str() + fpos);
+					float value = (((int32_t)*sample - (int32_t)center_code)) * v_gain - math_ch[i].v_offset;
+					wfm->m_samples.push_back(value);
+					fpos += 2;
+				}
+			}
+			else
+			{
+				for(size_t j = 0; j < wh.wave_length; j++)
+				{
+					uint8_t* sample = (uint8_t*)(f.c_str() + fpos);
+					float value = ((int16_t)*sample - (int16_t)center_code) * v_gain - math_ch[i].v_offset;
+					wfm->m_samples.push_back(value);
+					fpos += 1;
+				}
+			}
+
+			wfm->MarkModifiedFromCpu();
+			AutoscaleVertical(wave_idx);
 			wave_idx += 1;
 		}
 	}

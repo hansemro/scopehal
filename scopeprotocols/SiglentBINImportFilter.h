@@ -144,6 +144,7 @@ public:
 		int32_t ch_num;
 		double v_gain;
 		double v_offset;
+		double s_period;
 		int32_t codes_per_div;
 		bool enabled;
 	};
