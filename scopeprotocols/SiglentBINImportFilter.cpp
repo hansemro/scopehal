@@ -88,9 +88,8 @@ void SiglentBINImportFilter::OnFileNameChanged()
 			LogError("Unknown version in file header");
 			return;
 	}
-	
+
 	LogDebug("Version: %d\n", fh.version);
-	LogDebug("fpos: %d\n", fpos);
 
 	//Parse waveform header
 	WaveHeader wh;
@@ -167,8 +166,7 @@ void SiglentBINImportFilter::OnFileNameChanged()
 		}
 	};
 
-	LogDebug("sizeof(WaveHeader): %ld\n", sizeof(WaveHeader));
-	LogDebug("ch1_en: %d (%p)\n", wh.ch1_en, (void*)&wh.ch1_en);
+	LogDebug("ch1_en: %d\n", wh.ch1_en);
 	LogDebug("ch2_en: %d\n", wh.ch2_en);
 	LogDebug("ch3_en: %d\n", wh.ch3_en);
 	LogDebug("ch4_en: %d\n", wh.ch4_en);
