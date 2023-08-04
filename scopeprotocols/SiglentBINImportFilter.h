@@ -54,99 +54,45 @@ public:
 	// V2/V4 wave header
 	struct WaveHeader
 	{
-		int32_t ch1_en;				//Channel1 enable
-		int32_t ch2_en;				//Channel1 enable
-		int32_t ch3_en;				//Channel1 enable
-		int32_t ch4_en;				//Channel1 enable
-		double ch1_v_gain;			//Channel 1 vertical scale
-		char reserved1[32];
-		double ch2_v_gain;			//Channel 2 vertical scale
-		char reserved2[32];
-		double ch3_v_gain;			//Channel 3 vertical scale
-		char reserved3[32];
-		double ch4_v_gain;			//Channel 4 vertical scale
-		char reserved4[32];
-		double ch1_v_offset;		//Channel 1 vertical offset
-		char reserved5[32];
-		double ch2_v_offset;		//Channel 2 vertical offset
-		char reserved6[32];
-		double ch3_v_offset;		//Channel 3 vertical offset
-		char reserved7[32];
-		double ch4_v_offset;		//Channel 4 vertical offset
-		char reserved8[32];
+		int32_t ch_en[4];			//C1-C4 channel enable
+		struct {					//C1-C4 vertical gain
+			double value;
+			char reserved[32];
+		} ch_v_gain[4];
+		struct {					//C1-C4 vertical offset
+			double value;
+			char reserved[32];
+		} ch_v_offset[4];
 		int32_t digital_en;			//Digital enable
-		int32_t d_ch_en[16];		//D0-D15 enable
+		int32_t d_ch_en[16];		//D0-D15 channel enable
 		double time_div;			//Time base
 		char reserved9[32];
 		double time_delay;			//Trigger delay
 		char reserved10[32];
-		uint32_t wave_length;		//Number of samples per analog channel
-		double s_rate;				//Sampling rate of analog channel
+		uint32_t wave_length;		//Number of samples in each analog waveform
+		double s_rate;				//C1-C4 sampling rate
 		char reserved11[32];
-		uint32_t d_wave_length;		//Number of samples per digital channel
-		double d_s_rate;			//Sampling rate of digital channel
+		uint32_t d_wave_length;		//Number of samples in each digital waveform
+		double d_s_rate;			//D0-D15 sampling rate
 		char reserved12[32];
-		double ch1_probe;			//Channel 1 probe factor
-		double ch2_probe;			//Channel 2 probe factor
-		double ch3_probe;			//Channel 3 probe factor
-		double ch4_probe;			//Channel 4 probe factor
+		double ch_probe[4];			//C1-C4 probe factor
 		int8_t data_width;			//0:1 Byte, 1:2 Bytes
 		int8_t byte_order;			//0:LSB, 1:MSB
 		char reserved13[6];
 		int32_t num_hori_div;		//Number of horizontal divisions
-		int32_t ch1_codes_per_div;	//Channel 1 codes per division
-		int32_t ch2_codes_per_div;	//Channel 2 codes per division
-		int32_t ch3_codes_per_div;	//Channel 3 codes per division
-		int32_t ch4_codes_per_div;	//Channel 4 codes per division
-		int32_t math1_en;			//Math 1 channel enable
-		int32_t math2_en;			//Math 2 channel enable
-		int32_t math3_en;			//Math 3 channel enable
-		int32_t math4_en;			//Math 4 channel enable
-		double math1_v_gain;		//Math 1 vertical gain
-		char reserved14[32];
-		double math2_v_gain;		//Math 2 vertical gain
-		char reserved15[32];
-		double math3_v_gain;		//Math 3 vertical gain
-		char reserved16[32];
-		double math4_v_gain;		//Math 4 vertical gain
-		char reserved17[32];
-		double math1_v_offset;		//Math 1 vertical offset
-		char reserved18[32];
-		double math2_v_offset;		//Math 2 vertical offset
-		char reserved19[32];
-		double math3_v_offset;		//Math 3 vertical offset
-		char reserved20[32];
-		double math4_v_offset;		//Math 4 vertical offset
-		char reserved21[32];
-		uint32_t math1_wave_length;	//Number of Math 1 channel samples
-		uint32_t math2_wave_length;	//Number of Math 2 channel samples
-		uint32_t math3_wave_length;	//Number of Math 3 channel samples
-		uint32_t math4_wave_length;	//Number of Math 4 channel samples
-		double math1_s_period;		//Sampling interval of Math 1
-		double math2_s_period;		//Sampling interval of Math 2
-		double math3_s_period;		//Sampling interval of Math 3
-		double math4_s_period;		//Sampling interval of Math 4
-		int32_t math_codes_per_div;	//Math 1 codes per division
-	};
-
-	struct SiglentAnalogChannel
-	{
-		int32_t ch_num;
-		double v_gain;
-		double v_offset;
-		double probe_factor;
-		int32_t codes_per_div;
-		bool enabled;
-	};
-
-	struct SiglentMathChannel
-	{
-		int32_t ch_num;
-		double v_gain;
-		double v_offset;
-		double s_period;
-		int32_t codes_per_div;
-		bool enabled;
+		int32_t ch_codes_per_div[4];//C1-C4 codes per division
+		int32_t math_en[4];			//Math1-Math4 channel enable
+		struct {					//Math1-Math4 vertical gain
+			double value;
+			char reserved[32];
+		} math_v_gain[4];
+		struct {					//Math1-Math4 vertical offset
+			double value;
+			char reserved[32];
+		} math_v_offset[4];
+		uint32_t math_wave_length[4];//Math1-Math4 number of samples
+		double math_s_period[4];	//Math1-Math4 sampling interval
+		int32_t math_codes_per_div;	//Math1-Math4 codes per division
 	};
 	#pragma pack(pop)
 
