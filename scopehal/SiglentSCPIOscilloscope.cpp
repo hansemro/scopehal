@@ -1571,19 +1571,28 @@ void SiglentSCPIOscilloscope::BulkCheckChannelEnableState()
 	}
 
 	//Check digital status
-	for(unsigned int i = 0; i < m_digitalChannelCount; i++)
+	string reply = converse(":DIGITAL?");
+	if(reply == "ON")
 	{
-		string reply = converse(":DIGITAL:D%d?", i);
-		if(reply == "ON")
+		for(unsigned int i = 0; i < m_digitalChannelCount; i++)
 		{
-			m_channelsEnabled[m_digitalChannels[i]->GetIndex()] = true;
+			reply = converse(":DIGITAL:D%d?", i);
+			if(reply == "ON")
+			{
+				m_channelsEnabled[m_digitalChannels[i]->GetIndex()] = true;
+			}
+			else
+			{
+				m_channelsEnabled[m_digitalChannels[i]->GetIndex()] = false;
+			}
 		}
-		else if(reply == "OFF")
+	}
+	else
+	{
+		for(unsigned int i = 0; i < m_digitalChannelCount; i++)
 		{
 			m_channelsEnabled[m_digitalChannels[i]->GetIndex()] = false;
 		}
-		else
-			LogWarning("BulkCheckChannelEnableState: Unrecognised reply [%s]\n", reply.c_str());
 	}
 }
 
