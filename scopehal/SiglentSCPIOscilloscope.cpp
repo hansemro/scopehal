@@ -719,7 +719,7 @@ bool SiglentSCPIOscilloscope::IsChannelEnabled(size_t i)
 		//Digital
 
 		//See if the channel is on
-		size_t nchan = i - (m_analogChannelCount + 1);
+		size_t nchan = i - m_digitalChannelBase;
 		string str = converse(":DIGITAL:D%d?", nchan);
 
 		lock_guard<recursive_mutex> lock2(m_cacheMutex);
@@ -767,7 +767,8 @@ void SiglentSCPIOscilloscope::EnableChannel(size_t i)
 	else
 	{
 		//Digital channel
-		sendOnly(":DIGITAL:D%d ON", i - (m_analogChannelCount + 1));
+		size_t nchan = i - m_digitalChannelBase;
+		sendOnly(":DIGITAL:D%d ON", nchan);
 	}
 
 	lock_guard<recursive_mutex> lock(m_cacheMutex);
@@ -830,7 +831,8 @@ void SiglentSCPIOscilloscope::DisableChannel(size_t i)
 		//Digital channel
 
 		//Disable this channel
-		sendOnly(":DIGITAL:D%d OFF", i - (m_analogChannelCount + 1));
+		size_t nchan = i - m_digitalChannelBase;
+		sendOnly(":DIGITAL:D%d OFF", nchan);
 
 		//If we have NO digital channels enabled, disable the appropriate digital bus
 
