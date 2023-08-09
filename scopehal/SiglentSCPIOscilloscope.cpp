@@ -1484,7 +1484,7 @@ Oscilloscope::TriggerMode SiglentSCPIOscilloscope::PollTrigger()
 	return TRIGGER_MODE_RUN;
 }
 
-int SiglentSCPIOscilloscope::ReadWaveformBlock(uint32_t maxsize, char* data, bool hdSizeWorkaround)
+int SiglentSCPIOscilloscope::ReadWaveformBlock(uint32_t maxsize, char* data, bool digital, bool hdSizeWorkaround)
 {
 	char packetSizeSequence[17];
 	uint32_t getLength;
@@ -1531,6 +1531,8 @@ int SiglentSCPIOscilloscope::ReadWaveformBlock(uint32_t maxsize, char* data, boo
 	uint32_t len = getLength;
 	if(hdSizeWorkaround)
 		len *= 2;
+	if(digital)
+		len /= 8;
 	len = min(len, maxsize);
 
 	// Now get the data
@@ -1821,154 +1823,39 @@ vector<WaveformBase*> SiglentSCPIOscilloscope::ProcessAnalogWaveform(const char*
 	return ret;
 }
 
-map<int, SparseDigitalWaveform*> SiglentSCPIOscilloscope::ProcessDigitalWaveform(string& /*data*/)
+void SiglentSCPIOscilloscope::ProcessDigitalWaveform(map<int, vector<WaveformBase*>> &pending_waveforms,
+		const char* data,
+		int ch)
 {
-	map<int, SparseDigitalWaveform*> ret;
+	//TODO: use SparseDigitalWaveform to save space
+	auto cap = new UniformDigitalWaveform;
 
-	// Digital channels not yet implemented
-	return ret;
+	auto channel = m_digitalChannels[ch]->GetIndex();
 
-	/*
-
-	//See what channels are enabled
-	string tmp = data.substr(data.find("SelectedLines=") + 14);
-	tmp = tmp.substr(0, 16);
-	bool enabledChannels[16];
-	for(int i = 0; i < 16; i++)
-		enabledChannels[i] = (tmp[i] == '1');
-
-	//Quick and dirty string searching. We only care about a small fraction of the XML
-	//so no sense bringing in a full parser.
-	tmp = data.substr(data.find("<HorPerStep>") + 12);
-	tmp = tmp.substr(0, tmp.find("</HorPerStep>"));
-	float interval = atof(tmp.c_str()) * FS_PER_SECOND;
-	//LogDebug("Sample interval: %.2f fs\n", interval);
-
-	tmp = data.substr(data.find("<NumSamples>") + 12);
-	tmp = tmp.substr(0, tmp.find("</NumSamples>"));
-	size_t num_samples = atoi(tmp.c_str());
-	//LogDebug("Expecting %d samples\n", num_samples);
-
-	//Extract the raw trigger timestamp (nanoseconds since Jan 1 2000)
-	tmp = data.substr(data.find("<FirstEventTime>") + 16);
-	tmp = tmp.substr(0, tmp.find("</FirstEventTime>"));
-	int64_t timestamp;
-	if(1 != sscanf(tmp.c_str(), "%ld", &timestamp))
-		return ret;
-
-	//Get the client's local time.
-	//All we need from this is to know whether DST is active
-	tm now;
-	time_t tnow;
-	time(&tnow);
-	localtime_r(&tnow, &now);
-
-	//Convert Jan 1 2000 in the client's local time zone (assuming this is the same as instrument time) to Unix time.
-	//Note that the instrument time zone conversion seems to be broken and not handle DST offsets right.
-	//Move the epoch by an hour if we're currently in DST to compensate.
-	tm epoch;
-	epoch.tm_sec = 0;
-	epoch.tm_min = 0;
-	epoch.tm_hour = 0;
-	epoch.tm_mday = 1;
-	epoch.tm_mon = 0;
-	epoch.tm_year = 100;
-	epoch.tm_wday = 6;	  //Jan 1 2000 was a Saturday
-	epoch.tm_yday = 0;
-	epoch.tm_isdst = now.tm_isdst;
-	time_t epoch_stamp = mktime(&epoch);
-
-	//Pull out nanoseconds from the timestamp and convert to femtoseconds since that's the scopehal fine time unit
-	const int64_t ns_per_sec = 1000000000;
-	int64_t start_ns = timestamp % ns_per_sec;
-	int64_t start_fs = 1000000 * start_ns;
-	int64_t start_sec = (timestamp - start_ns) / ns_per_sec;
-	time_t start_time = epoch_stamp + start_sec;
-
-	//Pull out the actual binary data (Base64 coded)
-	tmp = data.substr(data.find("<BinaryData>") + 12);
-	tmp = tmp.substr(0, tmp.find("</BinaryData>"));
-
-	//Decode the base64
-	base64_decodestate bstate;
-	base64_init_decodestate(&bstate);
-	unsigned char* block = new unsigned char[tmp.length()];	   //base64 is smaller than plaintext, leave room
-	base64_decode_block(tmp.c_str(), tmp.length(), (char*)block, &bstate);
-
-	//We have each channel's data from start to finish before the next (no interleaving).
-	//TODO: Multithread across waveforms
-	unsigned int icapchan = 0;
-	for(unsigned int i = 0; i < m_digitalChannelCount; i++)
+	if(m_channelsEnabled[channel])
 	{
-		if(enabledChannels[i])
+		cap->m_timescale = round(FS_PER_SECOND / m_digitalSampleRate);
+		cap->m_startTimestamp = time(NULL);
+		double t = GetTime();
+		cap->m_startFemtoseconds = (t - floor(t)) * FS_PER_SECOND;
+		cap->m_triggerPhase = 0;
+
+		cap->PrepareForCpuAccess();
+
+		//TODO: parallelize
+		for(size_t j = 0; j < (static_cast<size_t>(m_digitalWaveformDataSize[ch]) / 8); j++)
 		{
-			DigitalWaveform* cap = new DigitalWaveform;
-			cap->m_timescale = interval;
-			cap->m_densePacked = true;
-
-			//Capture timestamp
-			cap->m_startTimestamp = start_time;
-			cap->m_startFemtoseconds = start_fs;
-
-			//Preallocate memory assuming no deduplication possible
-			cap->Resize(num_samples);
-
-			//Save the first sample (can't merge with sample -1 because that doesn't exist)
-			size_t base = icapchan * num_samples;
-			size_t k = 0;
-			cap->m_offsets[0] = 0;
-			cap->m_durations[0] = 1;
-			cap->m_samples[0] = block[base];
-
-			//Read and de-duplicate the other samples
-			//TODO: can we vectorize this somehow?
-			bool last = block[base];
-			for(size_t j = 1; j < num_samples; j++)
+			uint8_t samples = static_cast<uint8_t>(data[j]);
+			for(int k = 0; k < 8; k++)
 			{
-				bool sample = block[base + j];
-
-				//Deduplicate consecutive samples with same value
-				//FIXME: temporary workaround for rendering bugs
-				//if(last == sample)
-				if((last == sample) && ((j + 3) < num_samples))
-					cap->m_durations[k]++;
-
-				//Nope, it toggled - store the new value
-				else
-				{
-					k++;
-					cap->m_offsets[k] = j;
-					cap->m_durations[k] = 1;
-					cap->m_samples[k] = sample;
-					last = sample;
-				}
+				bool value = (samples >> k) & 0x1;
+				cap->m_samples.push_back(value);
 			}
-
-			//Done, shrink any unused space
-			cap->Resize(k);
-			cap->m_offsets.shrink_to_fit();
-			cap->m_durations.shrink_to_fit();
-			cap->m_samples.shrink_to_fit();
-
-			//See how much space we saved
-			LogDebug("%s: %zu samples deduplicated to %zu (%.1f %%)\n",
-				m_digitalChannels[i]->GetDisplayName().c_str(),
-				num_samples,
-				k,
-				(k * 100.0f) / num_samples);
-
-			//Done, save data and go on to next
-			ret[m_digitalChannels[i]->GetIndex()] = cap;
-			icapchan++;
 		}
 
-		//No data here for us!
-		else
-			ret[m_digitalChannels[i]->GetIndex()] = NULL;
+		cap->MarkModifiedFromCpu();
+		pending_waveforms[channel].push_back(cap);
 	}
-	delete[] block;
-	return ret;
-	*/
 }
 
 bool SiglentSCPIOscilloscope::AcquireData()
@@ -2099,11 +1986,20 @@ bool SiglentSCPIOscilloscope::AcquireData()
 				{
 					if(m_channelsEnabled[m_digitalChannels[i]->GetIndex()])
 					{
+						LogDebug("digital channels enabled\n");
 						denabled = true;
 						break;
 					}
 				}
 				m_cacheMutex.unlock();
+			}
+
+			//digital channels do not support segmented capture
+			if(denabled)
+			{
+				num_sequences = 1;
+				m_digitalSampleRate = static_cast<int64_t>(stof(converse(":DIGITAL:SRATE?")));
+				//m_digitalWaveformDataSize = atoi(converse(":DIGITAL:POINTS?"));
 			}
 
 			//Pull sequence count out of the WAVEDESC if we have analog channels active
@@ -2114,17 +2010,10 @@ bool SiglentSCPIOscilloscope::AcquireData()
 					num_sequences = trigtime_len / 16;
 			}
 
-			//No WAVEDESCs, look at digital channels
-			else
+			//Abort if no WAVEDESCs and no enabled digital channels
+			else if(!denabled)
 			{
-				//TODO: support sequence capture of digital channels if the instrument supports this
-				//(need to look into it)
-				if(denabled)
-					num_sequences = 1;
-
-				//no enabled channels. abort
-				else
-					return false;
+				return false;
 			}
 
 			if(pdesc)
@@ -2148,7 +2037,7 @@ bool SiglentSCPIOscilloscope::AcquireData()
 					if(enabled[i])
 					{
 						m_transport->SendCommand(":WAVEFORM:SOURCE C" + to_string(i + 1) + ";:WAVEFORM:DATA?");
-						m_analogWaveformDataSize[i] = ReadWaveformBlock(WAVEFORM_SIZE, m_analogWaveformData[i], hdWorkaround);
+						m_analogWaveformDataSize[i] = ReadWaveformBlock(WAVEFORM_SIZE, m_analogWaveformData[i], false, hdWorkaround);
 						// This is the 0x0a0a at the end
 						m_transport->ReadRawData(2, (unsigned char*)tmp);
 					}
@@ -2158,10 +2047,16 @@ bool SiglentSCPIOscilloscope::AcquireData()
 			//Read the data from the digital waveforms, if enabled
 			if(denabled)
 			{
-				if(!ReadWaveformBlock(WAVEFORM_SIZE, m_digitalWaveformDataBytes))
+				//Read the data from each digital waveform
+				for(unsigned int i = 0; i < m_digitalChannelCount; i++)
 				{
-					LogDebug("failed to download digital waveform\n");
-					return false;
+					if(m_channelsEnabled[m_digitalChannels[i]->GetIndex()])
+					{
+						m_transport->SendCommand(":WAVEFORM:SOURCE D" + to_string(i) + ";:WAVEFORM:DATA?");
+						m_digitalWaveformDataSize[i] = ReadWaveformBlock(WAVEFORM_SIZE, m_digitalWaveformData[i], true);
+						// This is the 0x0a0a at the end
+						m_transport->ReadRawData(2, (unsigned char*)tmp);
+					}
 				}
 			}
 
@@ -2200,6 +2095,19 @@ bool SiglentSCPIOscilloscope::AcquireData()
 				for(size_t j = 0; j < num_sequences; j++)
 					pending_waveforms[i].push_back(waveforms[i][j]);
 			}
+
+			if(denabled)
+			{
+				//Process digital waveforms
+				//TODO: parallelize
+				for(unsigned int i = 0; i < m_digitalChannelCount; i++)
+				{
+					if(m_channelsEnabled[m_digitalChannels[i]->GetIndex()])
+					{
+						ProcessDigitalWaveform(pending_waveforms, &m_digitalWaveformData[i][0], i);
+					}
+				}
+			}
 			break;
 
 		// --------------------------------------------------
@@ -2208,17 +2116,6 @@ bool SiglentSCPIOscilloscope::AcquireData()
 			break;
 			// --------------------------------------------------
 	}
-
-	//TODO: proper support for sequenced capture when digital channels are active
-	// if(denabled)
-	// {
-	// 	//This is a weird XML-y format but I can't find any other way to get it :(
-	// 	map<int, DigitalWaveform*> digwaves = ProcessDigitalWaveform(m_digitalWaveformData);
-
-	// 	//Done, update the data
-	// 	for(auto it : digwaves)
-	// 		pending_waveforms[it.first].push_back(it.second);
-	// }
 
 	//Now that we have all of the pending waveforms, save them in sets across all channels
 	m_pendingWaveformsMutex.lock();

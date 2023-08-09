@@ -48,6 +48,7 @@ class WindowTrigger;
  */
 
 #define MAX_ANALOG 4
+#define MAX_DIGITAL 16
 #define WAVEDESC_SIZE 346
 
 // These SDS2000/SDS5000 scopes will actually sample 200MPoints, but the maximum it can transfer in one
@@ -249,7 +250,7 @@ protected:
 	std::string GetPossiblyEmptyString(const std::string& property);
 
 	//  bool ReadWaveformBlock(std::string& data);
-	int ReadWaveformBlock(uint32_t maxsize, char* data, bool hdSizeWorkaround = false);
+	int ReadWaveformBlock(uint32_t maxsize, char* data, bool digital = false, bool hdSizeWorkaround = false);
 	//  	bool ReadWavedescs(
 	//		std::vector<std::string>& wavedescs,
 	//		bool* enabled,
@@ -269,7 +270,9 @@ protected:
 		double basetime,
 		double* wavetime,
 		int i);
-	std::map<int, SparseDigitalWaveform*> ProcessDigitalWaveform(std::string& data);
+	void ProcessDigitalWaveform(std::map<int, std::vector<WaveformBase*>> &pending_waveforms,
+		const char* data,
+		int i);
 
 	//hardware analog channel count, independent of LA option etc
 	unsigned int m_analogChannelCount;
@@ -302,8 +305,8 @@ protected:
 	char m_analogWaveformData[MAX_ANALOG][WAVEFORM_SIZE];
 	int m_analogWaveformDataSize[MAX_ANALOG];
 	char m_wavedescs[MAX_ANALOG][WAVEDESC_SIZE];
-	char m_digitalWaveformDataBytes[WAVEFORM_SIZE];
-	std::string m_digitalWaveformData;
+	char m_digitalWaveformData[MAX_DIGITAL][WAVEFORM_SIZE];
+	int m_digitalWaveformDataSize[MAX_DIGITAL];
 
 	//Cached configuration
 	std::map<size_t, float> m_channelVoltageRanges;
@@ -311,6 +314,7 @@ protected:
 	std::map<int, bool> m_channelsEnabled;
 	bool m_sampleRateValid;
 	int64_t m_sampleRate;
+	int64_t m_digitalSampleRate;
 	bool m_memoryDepthValid;
 	int64_t m_memoryDepth;
 	bool m_triggerOffsetValid;
