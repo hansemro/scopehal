@@ -1823,6 +1823,17 @@ vector<WaveformBase*> SiglentSCPIOscilloscope::ProcessAnalogWaveform(const char*
 	return ret;
 }
 
+static void ConvertDigitalSamplesGeneric(bool* pout, const uint8_t* pin, size_t count)
+{
+	for(size_t i = 0; i < count / 8; i++)
+	{
+		for(int j = 0; j < 8; j++)
+		{
+			pout[8*i+j] = (pin[i] >> j) & 0x1;
+		}
+	}
+}
+
 void SiglentSCPIOscilloscope::ProcessDigitalWaveform(map<int, vector<WaveformBase*>> &pending_waveforms,
 		const char* data,
 		int ch)
@@ -1840,18 +1851,13 @@ void SiglentSCPIOscilloscope::ProcessDigitalWaveform(map<int, vector<WaveformBas
 		cap->m_startFemtoseconds = (t - floor(t)) * FS_PER_SECOND;
 		cap->m_triggerPhase = 0;
 
+		cap->Resize(m_digitalWaveformDataSize[ch]);
 		cap->PrepareForCpuAccess();
 
-		//TODO: parallelize
-		for(size_t j = 0; j < (static_cast<size_t>(m_digitalWaveformDataSize[ch]) / 8); j++)
-		{
-			uint8_t samples = static_cast<uint8_t>(data[j]);
-			for(int k = 0; k < 8; k++)
-			{
-				bool value = (samples >> k) & 0x1;
-				cap->m_samples.push_back(value);
-			}
-		}
+		ConvertDigitalSamplesGeneric(
+			cap->m_samples.GetCpuPointer(),
+			reinterpret_cast<const uint8_t*>(data),
+			static_cast<size_t>(m_digitalWaveformDataSize[ch]));
 
 		cap->MarkModifiedFromCpu();
 		pending_waveforms[channel].push_back(cap);
