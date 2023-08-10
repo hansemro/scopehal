@@ -54,6 +54,8 @@ class WindowTrigger;
 // chunk is 10MPoints
 // TODO(dannas): Can the Siglent SDS1104x-e really transfer 14MPoints? Update comment and constant
 #define WAVEFORM_SIZE (14 * 1000 * 1000)
+// SDS6000A
+#define MAX_WAVEFORM_SIZE (500 * 1000 * 1000)
 
 #define c_digiChannelsPerBus 8
 
@@ -250,6 +252,7 @@ protected:
 
 	//  bool ReadWaveformBlock(std::string& data);
 	int ReadWaveformBlock(uint32_t maxsize, char* data, bool hdSizeWorkaround = false);
+	int ReadWaveformBlockMultiple(uint32_t maxsize, char* data, bool hdSizeWorkaround = false);
 	//  	bool ReadWavedescs(
 	//		std::vector<std::string>& wavedescs,
 	//		bool* enabled,
@@ -299,7 +302,7 @@ protected:
 	bool m_triggerForced;
 
 	// Transfer buffer. This is a bit hacky
-	char m_analogWaveformData[MAX_ANALOG][WAVEFORM_SIZE];
+	char m_analogWaveformData[MAX_ANALOG][MAX_WAVEFORM_SIZE];
 	int m_analogWaveformDataSize[MAX_ANALOG];
 	char m_wavedescs[MAX_ANALOG][WAVEDESC_SIZE];
 	char m_digitalWaveformDataBytes[WAVEFORM_SIZE];

@@ -1470,6 +1470,27 @@ int SiglentSCPIOscilloscope::ReadWaveformBlock(uint32_t maxsize, char* data, boo
 }
 
 /**
+ * @brief Read multiple waveform blocks for analog channels.
+ */
+int SiglentSCPIOscilloscope::ReadWaveformBlockMultiple(uint32_t size, char* data, bool hdSizeWorkaround)
+{
+	uint32_t data_length = 0;
+	char tmp[128];
+	int bytes_per_sample = m_highDefinition ? 2 : 1;
+	while(data_length < size)
+	{
+		LogDebug("data_size: %d\n", size);
+		m_transport->SendCommand(":WAVEFORM:START " + to_string(data_length / bytes_per_sample) + ";:WAVEFORM:DATA?");
+		//Length is in number of bytes for analog channels
+		uint32_t part_length = ReadWaveformBlock(WAVEFORM_SIZE, data + data_length, hdSizeWorkaround);
+		//This is the 0x0a0a at the end
+		m_transport->ReadRawData(2, (unsigned char*)tmp);
+		data_length += part_length;
+	}
+	return data_length;
+}
+
+/**
 	@brief Optimized function for checking channel enable status en masse with less round trips to the scope
  */
 void SiglentSCPIOscilloscope::BulkCheckChannelEnableState()
@@ -1532,7 +1553,7 @@ bool SiglentSCPIOscilloscope::ReadWavedescs(
 			if(firstEnabledChannel == UINT_MAX)
 				firstEnabledChannel = i;
 
-			m_transport->SendCommand(":WAVEFORM:SOURCE C" + to_string(i + 1) + ";:WAVEFORM:PREAMBLE?");
+			m_transport->SendCommand(":WAVEFORM:START 0;:WAVEFORM:SOURCE C" + to_string(i + 1) + ";:WAVEFORM:PREAMBLE?");
 			if(WAVEDESC_SIZE != ReadWaveformBlock(WAVEDESC_SIZE, wavedescs[i]))
 				LogError("ReadWaveformBlock for wavedesc %u failed\n", i);
 
@@ -2061,15 +2082,16 @@ bool SiglentSCPIOscilloscope::AcquireData()
 				//2000X+ HD running firmware 1.1.7.0 seems to be unaffected.
 				bool hdWorkaround = m_requireSizeWorkaround && m_highDefinition;
 
+				//Data size in bytes
+				uint32_t data_size = *reinterpret_cast<uint32_t*>(pdesc + 60);
+
 				//Read the data from each analog waveform
 				for(unsigned int i = 0; i < m_analogChannelCount; i++)
 				{
 					if(enabled[i])
 					{
-						m_transport->SendCommand(":WAVEFORM:SOURCE C" + to_string(i + 1) + ";:WAVEFORM:DATA?");
-						m_analogWaveformDataSize[i] = ReadWaveformBlock(WAVEFORM_SIZE, m_analogWaveformData[i], hdWorkaround);
-						// This is the 0x0a0a at the end
-						m_transport->ReadRawData(2, (unsigned char*)tmp);
+						m_transport->SendCommand(":WAVEFORM:POINT 0;:WAVEFORM:SOURCE C" + to_string(i + 1));
+						m_analogWaveformDataSize[i] = ReadWaveformBlockMultiple(data_size, m_analogWaveformData[i], hdWorkaround);
 					}
 				}
 			}
