@@ -2571,7 +2571,7 @@ vector<uint64_t> SiglentSCPIOscilloscope::GetSampleDepthsNonInterleaved()
 		case MODEL_SIGLENT_SDS2000XP:
 		case MODEL_SIGLENT_SDS2000X_HD:
 		case MODEL_SIGLENT_SDS5000X:
-			ret = {10 * 1000, 100 * 1000, 1000 * 1000, 10 * 1000 * 1000};
+			ret = {10 * 1000, 100 * 1000, 1000 * 1000, 10 * 1000 * 1000, 100 * 1000 * 1000};
 			break;
 
 		case MODEL_SIGLENT_SDS6000A:
@@ -2819,20 +2819,18 @@ void SiglentSCPIOscilloscope::SetSampleDepth(uint64_t depth)
 				case 10000000:
 					sendOnly("ACQUIRE:MDEPTH 10M");
 					break;
-
-				// We don't yet support memory depths that need to be transferred in chunks
 				case 20000000:
-				//sendOnly("ACQUIRE:MDEPTH 20M");
-				//	break;
+					sendOnly("ACQUIRE:MDEPTH 20M");
+					break;
 				case 50000000:
-				//	sendOnly("ACQUIRE:MDEPTH 50M");
-				//	break;
+					sendOnly("ACQUIRE:MDEPTH 50M");
+					break;
 				case 100000000:
-				//	sendOnly("ACQUIRE:MDEPTH 100M");
-				//	break;
+					sendOnly("ACQUIRE:MDEPTH 100M");
+					break;
 				case 200000000:
-				//	sendOnly("ACQUIRE:MDEPTH 200M");
-				//	break;
+					sendOnly("ACQUIRE:MDEPTH 200M");
+					break;
 				default:
 					LogError("Invalid memory depth for channel: %lu\n", depth);
 			}
