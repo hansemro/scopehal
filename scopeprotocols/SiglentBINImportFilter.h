@@ -44,6 +44,13 @@ public:
 
 	PROTOCOL_DECODER_INITPROC(SiglentBINImportFilter)
 
+	//Convert 1-bit digital samples to bool array
+	static void ConvertDigitalSamples(bool* pout, uint8_t* pin, size_t count);
+	static void ConvertDigitalSamplesGeneric(bool* pout, uint8_t* pin, size_t count);
+	#ifdef __x86_64__
+	static void ConvertDigitalSamplesAVX2(bool* pout, uint8_t* pin, size_t count);
+	#endif
+
 	//Siglent binary capture structs
 	#pragma pack(push, 1)
 	struct FileHeader

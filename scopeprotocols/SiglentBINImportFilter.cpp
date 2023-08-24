@@ -30,6 +30,11 @@
 #include "../scopehal/scopehal.h"
 #include "SiglentBINImportFilter.h"
 
+#ifdef __x86_64__
+#include <immintrin.h>
+#endif
+#include <omp.h>
+
 using namespace std;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -52,6 +57,127 @@ string SiglentBINImportFilter::GetProtocolName()
 {
 	return "Siglent (V2/V4) BIN Import";
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Convert 1-bit Digital Samples to Bool Array
+
+void SiglentBINImportFilter::ConvertDigitalSamples(bool* pout, uint8_t* pin, size_t count)
+{
+	//Divide large waveforms (>1M points) into blocks and multithread them
+	if(count > (1000000/8))
+	{
+		//Round blocks to multiples of 32 samples (4 bytes) for clean vectorization
+		size_t numblocks = omp_get_max_threads();
+		size_t lastblock = numblocks - 1;
+		size_t blocksize = count / numblocks;
+		blocksize = blocksize - (blocksize % 4);
+
+		#pragma omp parallel for
+		for(size_t i=0; i<numblocks; i++)
+		{
+			//Last block gets any extra that didn't divide evenly
+			size_t nsamp = blocksize;
+			if(i == lastblock)
+				nsamp = count - i*blocksize;
+
+			size_t off = i*blocksize;
+
+			#ifdef __x86_64__
+			if(g_hasAvx2)
+			{
+				ConvertDigitalSamplesAVX2(
+					pout + off,
+					pin + off,
+					nsamp);
+			}
+			else
+			#endif
+			{
+				ConvertDigitalSamplesGeneric(
+					pout + off,
+					pin + off,
+					nsamp);
+			}
+		}
+	}
+
+	//Small waveforms get done single threaded to avoid overhead
+	else
+	{
+		#ifdef __x86_64__
+		if(g_hasAvx2)
+			ConvertDigitalSamplesAVX2(pout, pin, count);
+		else
+		#endif
+			ConvertDigitalSamplesGeneric(pout, pin, count);
+	}
+}
+
+void SiglentBINImportFilter::ConvertDigitalSamplesGeneric(bool* pout, uint8_t* pin, size_t count)
+{
+	for(size_t i = 0; i < count; i++)
+	{
+		for(int j = 0; j < 8; j++)
+		{
+			pout[8*i + j] = (pin[i] >> j) & 0x1;
+		}
+	}
+}
+
+#ifdef __x86_64__
+__attribute__((target("avx2")))
+void SiglentBINImportFilter::ConvertDigitalSamplesAVX2(bool* pout, uint8_t* pin, size_t count)
+{
+	unsigned int end = count - (count % 4);
+
+	//Mask to get n-th bit in n-th byte, where n is in 0..7.
+	//Broadcast mask for 4 blocks (with 4x8=32 samples);
+	const __m256i bitmask = _mm256_set1_epi64x(0x8040201008040201);
+
+	//Mask to get first bit of each byte
+	const __m256i ones = _mm256_set1_epi8(0x1);
+
+	for(unsigned int k = 0; k < end; k += 4)
+	{
+		//Each block contains 8 samples
+		uint8_t block0 = pin[k];
+		uint8_t block1 = pin[k + 1];
+		uint8_t block2 = pin[k + 2];
+		uint8_t block3 = pin[k + 3];
+
+		//Broadcast each block 8 times (such that each sample occupies its own byte)
+		__m256i bc_samps = _mm256_set_epi8( block3, block3, block3, block3,
+											block3, block3, block3, block3,
+											block2, block2, block2, block2,
+											block2, block2, block2, block2,
+											block1, block1, block1, block1,
+											block1, block1, block1, block1,
+											block0, block0, block0, block0,
+											block0, block0, block0, block0);
+
+		//Extract nth bit of nth byte for each block
+		__m256i result = _mm256_and_si256(bc_samps, bitmask);
+
+		//Fills each byte with 1s if it matches bitmask
+		result = _mm256_cmpeq_epi8(result, bitmask);
+
+		//Mask to get first bit of each byte. This gives us our clean bool array!
+		result = _mm256_and_si256(result, ones);
+
+		//Store results
+		_mm256_storeu_si256(reinterpret_cast<__m256i*>(pout + (k*8)), result);
+	}
+
+	//Get any extras we didn't get in the SIMD loop
+	for(size_t i = end; i < count; i++)
+	{
+		for(size_t j = 0; j < 8; j++)
+		{
+			pout[8*i + j] = (pin[i] >> j) & 0x1;
+		}
+	}
+}
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Actual decoder logic
@@ -259,19 +385,14 @@ void SiglentBINImportFilter::OnFileNameChanged()
 				wfm->m_triggerPhase = 0;
 				wfm->PrepareForCpuAccess();
 				SetData(wfm, m_streams.size() - 1);
+				wfm->Resize(wh.d_wave_length);
 
 				LogDebug("Waveform[%d]: %s\n", wave_idx, name.c_str());
-				for(size_t j = 0; j < (wh.d_wave_length / 8); j++)
-				{
-					uint8_t samples = *reinterpret_cast<const uint8_t*>(f.c_str() + fpos);
-					for(int k = 0; k < 8; k++)
-					{
-						bool value = samples & 0x1;
-						samples >>= 1;
-						wfm->m_samples.push_back(value);
-					}
-					fpos += 1;
-				}
+				ConvertDigitalSamples(
+					wfm->m_samples.GetCpuPointer(),
+					(uint8_t*)(f.c_str() + fpos),
+					wh.d_wave_length / 8);
+				fpos += wh.d_wave_length / 8;
 
 				wfm->MarkModifiedFromCpu();
 				wave_idx += 1;
