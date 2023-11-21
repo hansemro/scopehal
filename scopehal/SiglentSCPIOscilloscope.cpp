@@ -3292,15 +3292,18 @@ void SiglentSCPIOscilloscope::SetADCMode(size_t /*channel*/, size_t mode)
 	if(mode == ADC_MODE_10BIT)
 	{
 		m_transport->SendCommandQueued("ACQ:RES 10Bits");
+		m_transport->FlushCommandQueue();
 		this_thread::sleep_for(c_adc_delay);
 		m_transport->SendCommandQueued(":WAVEFORM:WIDTH WORD");
 	}
 	else //if(mode == ADC_MODE_8BIT)
 	{
 		m_transport->SendCommandQueued("ACQ:RES 8Bits");
+		m_transport->FlushCommandQueue();
 		this_thread::sleep_for(c_adc_delay);
 		m_transport->SendCommandQueued(":WAVEFORM:WIDTH BYTE");
 	}
+	m_transport->FlushCommandQueue();
 	this_thread::sleep_for(c_adc_delay);
 
 	if(IsTriggerArmed())
