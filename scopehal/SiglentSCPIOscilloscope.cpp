@@ -1538,7 +1538,8 @@ bool SiglentSCPIOscilloscope::ReadWavedescs(
 			if(firstEnabledChannel == UINT_MAX)
 				firstEnabledChannel = i;
 
-			m_transport->SendCommand(":WAVEFORM:SOURCE C" + to_string(i + 1) + ";:WAVEFORM:PREAMBLE?");
+			m_transport->SendCommandQueued(":WAVEFORM:SOURCE C" + to_string(i + 1) + ";:WAVEFORM:PREAMBLE?");
+			m_transport->FlushCommandQueue();
 			if(WAVEDESC_SIZE != ReadWaveformBlock(WAVEDESC_SIZE, wavedescs[i]))
 				LogError("ReadWaveformBlock for wavedesc %u failed\n", i);
 
@@ -1940,7 +1941,8 @@ bool SiglentSCPIOscilloscope::AcquireData()
 			{
 				if(enabled[i])
 				{
-					m_transport->SendCommand("C" + to_string(i + 1) + ":WAVEFORM? DAT2");
+					m_transport->SendCommandQueued("C" + to_string(i + 1) + ":WAVEFORM? DAT2");
+					m_transport->FlushCommandQueue();
 					// length of data is current memory depth
 					m_analogWaveformDataSize[i] = ReadWaveformBlock(WAVEFORM_SIZE, m_analogWaveformData[i]);
 					// This is the 0x0a0a at the end
@@ -2072,7 +2074,8 @@ bool SiglentSCPIOscilloscope::AcquireData()
 				{
 					if(enabled[i])
 					{
-						m_transport->SendCommand(":WAVEFORM:SOURCE C" + to_string(i + 1) + ";:WAVEFORM:DATA?");
+						m_transport->SendCommandQueued(":WAVEFORM:SOURCE C" + to_string(i + 1) + ";:WAVEFORM:DATA?");
+						m_transport->FlushCommandQueue();
 						m_analogWaveformDataSize[i] = ReadWaveformBlock(WAVEFORM_SIZE, m_analogWaveformData[i], hdWorkaround);
 						// This is the 0x0a0a at the end
 						m_transport->ReadRawData(2, (unsigned char*)tmp);
@@ -2095,6 +2098,7 @@ bool SiglentSCPIOscilloscope::AcquireData()
 			if(!m_triggerOneShot)
 			{
 				sendOnly(":TRIGGER:MODE SINGLE");
+				m_transport->FlushCommandQueue();
 				m_triggerArmed = true;
 			}
 
@@ -2190,6 +2194,7 @@ void SiglentSCPIOscilloscope::Start()
 			break;
 			// --------------------------------------------------
 	}
+	m_transport->FlushCommandQueue();
 
 	m_triggerArmed = true;
 	m_triggerOneShot = false;
@@ -2223,6 +2228,7 @@ void SiglentSCPIOscilloscope::StartSingleTrigger()
 			break;
 			// --------------------------------------------------
 	}
+	m_transport->FlushCommandQueue();
 
 	m_triggerArmed = true;
 	m_triggerOneShot = true;
@@ -2238,14 +2244,14 @@ void SiglentSCPIOscilloscope::Stop()
 		// --------------------------------------------------
 		case MODEL_SIGLENT_SDS1000:
 		case MODEL_SIGLENT_SDS2000XE:
-			m_transport->SendCommandImmediate("STOP");
+			m_transport->SendCommandQueued("STOP");
 			break;
 		// --------------------------------------------------
 		case MODEL_SIGLENT_SDS2000XP:
 		case MODEL_SIGLENT_SDS2000X_HD:
 		case MODEL_SIGLENT_SDS5000X:
 		case MODEL_SIGLENT_SDS6000A:
-			m_transport->SendCommandImmediate(":TRIGGER:MODE STOP");
+			m_transport->SendCommandQueued(":TRIGGER:MODE STOP");
 			break;
 		// --------------------------------------------------
 		default:
@@ -2253,6 +2259,7 @@ void SiglentSCPIOscilloscope::Stop()
 			break;
 			// --------------------------------------------------
 	}
+	m_transport->FlushCommandQueue();
 
 	m_triggerArmed = false;
 	m_triggerOneShot = true;
@@ -2293,6 +2300,7 @@ void SiglentSCPIOscilloscope::ForceTrigger()
 			break;
 			// --------------------------------------------------
 	}
+	m_transport->FlushCommandQueue();
 
 	m_triggerArmed = true;
 	this_thread::sleep_for(c_trigger_delay);
