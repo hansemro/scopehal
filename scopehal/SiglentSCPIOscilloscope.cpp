@@ -3547,7 +3547,7 @@ void SiglentSCPIOscilloscope::PullDropoutTrigger()
 	dt->SetDropoutTime(fs.ParseString(converse(":TRIGGER:DROPOUT:TIME?")));
 
 	//Edge type
-	if(Trim(converse(":TRIGGER:DROPOUT:SLOPE?")) == "RISING")
+	if(Trim(converse(":TRIGGER:DROPOUT:SLOPE?")) == "RISing")
 		dt->SetType(DropoutTrigger::EDGE_RISING);
 	else
 		dt->SetType(DropoutTrigger::EDGE_FALLING);
