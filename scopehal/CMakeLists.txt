@@ -153,6 +153,7 @@ set(SCOPEHAL_SOURCES
 	SiglentLoad.cpp
 	SiglentPowerSupply.cpp
 	SiglentSCPIOscilloscope.cpp
+	SiglentOscilloscope.cpp
 	SiglentVectorSignalGenerator.cpp
 	TektronixOscilloscope.cpp
 	ThunderScopeOscilloscope.cpp
