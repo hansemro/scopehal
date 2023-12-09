@@ -3483,11 +3483,11 @@ void SiglentSCPIOscilloscope::PullTrigger()
 				PullSlewRateTrigger();
 			else if(reply == "UART")
 				PullUartTrigger();
-			else if(reply == "INTerval")
+			else if(reply == "PULSe")
 				PullPulseWidthTrigger();
 			else if(reply == "WINDow")
 				PullWindowTrigger();
-			// Note that PULSe, PATTern, QUALified, VIDeo, IIC, SPI, LIN, CAN, FLEXray, CANFd & IIS are not yet handled
+			// Note that INTerval, PATTern, QUALified, VIDeo, IIC, SPI, LIN, CAN, FLEXray, CANFd & IIS are not yet handled
 			//Unrecognized trigger type
 			else
 			{
@@ -3630,20 +3630,20 @@ void SiglentSCPIOscilloscope::PullPulseWidthTrigger()
 	auto pt = dynamic_cast<PulseWidthTrigger*>(m_trigger);
 
 	//Level
-	pt->SetLevel(stof(converse(":TRIGGER:INTERVAL:LEVEL?")));
+	pt->SetLevel(stof(converse(":TRIGGER:PULSE:LEVEL?")));
 
 	//Condition
-	pt->SetCondition(GetCondition(converse(":TRIGGER:INTERVAL:LIMIT?")));
+	pt->SetCondition(GetCondition(converse(":TRIGGER:PULSE:LIMIT?")));
 
 	//Min range
 	Unit fs(Unit::UNIT_FS);
-	pt->SetLowerBound(fs.ParseString(converse(":TRIGGER:INTERVAL:TLOWER?")));
+	pt->SetLowerBound(fs.ParseString(converse(":TRIGGER:PULSE:TLOWER?")));
 
 	//Max range
-	pt->SetUpperBound(fs.ParseString(converse(":TRIGGER:INTERVAL:TUPPER?")));
+	pt->SetUpperBound(fs.ParseString(converse(":TRIGGER:PULSE:TUPPER?")));
 
 	//Slope
-	GetTriggerSlope(pt, Trim(converse(":TRIGGER:INTERVAL:SLOPE?")));
+	GetTriggerSlope(pt, Trim(converse(":TRIGGER:PULSE:POLARITY?")));
 }
 
 /**
@@ -3852,9 +3852,9 @@ void SiglentSCPIOscilloscope::GetTriggerSlope(EdgeTrigger* trig, string reply)
 		case MODEL_SIGLENT_SDS2000X_HD:
 		case MODEL_SIGLENT_SDS5000X:
 		case MODEL_SIGLENT_SDS6000A:
-			if(reply == "RISing")
+			if((reply == "RISing") || (reply == "POSitive"))
 				trig->SetType(EdgeTrigger::EDGE_RISING);
-			else if(reply == "FALLing")
+			else if((reply == "FALLing") || (reply == "NEGative"))
 				trig->SetType(EdgeTrigger::EDGE_FALLING);
 			else if(reply == "ALTernate")
 				trig->SetType(EdgeTrigger::EDGE_ANY);
@@ -3950,8 +3950,8 @@ void SiglentSCPIOscilloscope::PushTrigger()
 			}
 			else if(pt)
 			{
-				sendOnly(":TRIGGER:TYPE INTERVAL");
-				sendOnly(":TRIGGER:INTERVAL:SOURCE %s", m_trigger->GetInput(0).m_channel->GetHwname().c_str());
+				sendOnly(":TRIGGER:TYPE PULSE");
+				sendOnly(":TRIGGER:PULSE:SOURCE %s", m_trigger->GetInput(0).m_channel->GetHwname().c_str());
 				PushPulseWidthTrigger(pt);
 			}
 			else if(rt)
@@ -3981,7 +3981,7 @@ void SiglentSCPIOscilloscope::PushTrigger()
 				PushWindowTrigger(wt);
 			}
 
-			// TODO: Add in PULSE, VIDEO, PATTERN, QUALITFIED, SPI, IIC, CAN, LIN, FLEXRAY and CANFD Triggers
+			// TODO: Add in INTERVAL, VIDEO, PATTERN, QUALITFIED, SPI, IIC, CAN, LIN, FLEXRAY and CANFD Triggers
 
 			else if(et)	   //must be last
 			{
@@ -4095,10 +4095,11 @@ void SiglentSCPIOscilloscope::PushEdgeTrigger(EdgeTrigger* trig, const std::stri
  */
 void SiglentSCPIOscilloscope::PushPulseWidthTrigger(PulseWidthTrigger* trig)
 {
-	PushEdgeTrigger(trig, "INTERVAL");
-	PushCondition(":TRIGGER:INTERVAL", trig->GetCondition());
-	PushFloat(":TRIGGER:INTERVAL:TUPPER", trig->GetUpperBound() * SECONDS_PER_FS);
-	PushFloat(":TRIGGER:INTERVAL:TLOWER", trig->GetLowerBound() * SECONDS_PER_FS);
+	PushCondition(":TRIGGER:PULSE", trig->GetCondition());
+	PushFloat(":TRIGGER:PULSE:TUPPER", trig->GetUpperBound() * SECONDS_PER_FS);
+	PushFloat(":TRIGGER:PULSE:TLOWER", trig->GetLowerBound() * SECONDS_PER_FS);
+	PushFloat(":TRIGGER:PULSE:LEVEL", trig->GetLevel());
+	sendOnly(":TRIGGER:PULSE:POLARITY %s", (trig->GetType() == PulseWidthTrigger::EDGE_RISING) ? "POSITIVE" : "NEGATIVE");
 }
 
 /**
