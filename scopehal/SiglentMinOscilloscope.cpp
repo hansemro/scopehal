@@ -149,6 +149,8 @@ void SiglentMinOscilloscope::IdentifyHardware()
 	char model[128] = "";
 	char serial[128] = "";
 	char version[128] = "";
+	//Parse IDN
+	//Siglent Technologies,SDS2204X Plus,SDS2ABCDEFGHIJ,5.4.1.5.2R3
 	if(4 != sscanf(reply.c_str(), "%127[^,],%127[^,],%127[^,],%127s", vendor, model, serial, version))
 	{
 		LogError("Bad IDN response %s\n", reply.c_str());
@@ -206,6 +208,7 @@ void SiglentMinOscilloscope::DetectAnalogChannels()
 	// Char 7 of the model name is the number of channels
 	// SDS2104X Plus
 	//       ^
+	//       4 channels
 	if(m_model.length() > 7)
 	{
 		switch(m_model[6])
@@ -663,6 +666,7 @@ Oscilloscope::TriggerMode SiglentMinOscilloscope::PollTrigger()
 	//Stopped, no data available
 	if(sinr == "Stop")
 	{
+		//For single mode: the trigger stops when data is ready to be sent
 		if(m_triggerArmed)
 		{
 			//Only mark the trigger as disarmed if this was a one-shot trigger.
