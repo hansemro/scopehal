@@ -151,6 +151,7 @@ set(SCOPEHAL_SOURCES
 	RigolFunctionGenerator.cpp
 	RigolOscilloscope.cpp
 	SiglentLoad.cpp
+	SiglentMinOscilloscope.cpp
 	SiglentPowerSupply.cpp
 	SiglentSCPIOscilloscope.cpp
 	SiglentVectorSignalGenerator.cpp
