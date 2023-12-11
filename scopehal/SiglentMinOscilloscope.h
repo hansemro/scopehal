@@ -33,14 +33,7 @@
 #include <mutex>
 #include <chrono>
 
-class DropoutTrigger;
 class EdgeTrigger;
-class GlitchTrigger;
-class PulseWidthTrigger;
-class RuntTrigger;
-class SlewRateTrigger;
-class UartTrigger;
-class WindowTrigger;
 
 /**
 	@brief A Siglent new generation scope based on linux (SDS2000X+/SDS5000/SDS6000)
@@ -55,7 +48,6 @@ class WindowTrigger;
 // TODO(dannas): Can the Siglent SDS1104x-e really transfer 14MPoints? Update comment and constant
 #define WAVEFORM_SIZE (14 * 1000 * 1000)
 
-#define c_digiChannelsPerBus 8
 
 class SiglentMinOscilloscope
 	: public virtual SCPIOscilloscope
@@ -80,7 +72,6 @@ protected:
 public:
 	//Device information
 	virtual unsigned int GetInstrumentTypes() const override;
-	virtual unsigned int GetMeasurementTypes();
 	virtual uint32_t GetInstrumentTypesForChannel(size_t i) const override;
 
 	virtual void FlushConfigCache();
@@ -223,8 +214,6 @@ protected:
 	bool m_highDefinition;
 	//True if on SDS2000X+ fw 1.3.9R6 and older
 	bool m_requireSizeWorkaround;
-
-	int64_t m_timeDiv;
 
 	//Other channels
 	//OscilloscopeChannel* m_extTrigChannel;

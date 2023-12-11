@@ -303,15 +303,6 @@ OscilloscopeChannel* SiglentMinOscilloscope::GetExternalTrigger()
 }
 
 /**
-	@brief See what measurement capabilities we have
- */
-unsigned int SiglentMinOscilloscope::GetMeasurementTypes()
-{
-	unsigned int type = 0;
-	return type;
-}
-
-/**
 	@brief See what features we have
  */
 unsigned int SiglentMinOscilloscope::GetInstrumentTypes() const
@@ -351,23 +342,10 @@ bool SiglentMinOscilloscope::IsChannelEnabled(size_t i)
 	if(i < m_analogChannelCount)
 	{
 		//See if the channel is enabled, hide it if not
-		string reply;
-
-		switch(m_modelid)
+		string reply = converse(":CHANNEL%d:SWITCH?", i + 1);
 		{
-			// --------------------------------------------------
-			case MODEL_SIGLENT_SDS2000XP:
-				reply = converse(":CHANNEL%d:SWITCH?", i + 1);
-				{
-					lock_guard<recursive_mutex> lock2(m_cacheMutex);
-					m_channelsEnabled[i] = (reply.find("OFF") != 0);	//may have a trailing newline, ignore that
-				}
-				break;
-			// --------------------------------------------------
-			default:
-				LogError("Unknown scope type\n");
-				break;
-				// --------------------------------------------------
+			lock_guard<recursive_mutex> lock2(m_cacheMutex);
+			m_channelsEnabled[i] = (reply.find("OFF") != 0);	//may have a trailing newline, ignore that
 		}
 	}
 
@@ -384,18 +362,7 @@ void SiglentMinOscilloscope::EnableChannel(size_t i)
 	//If this is an analog channel, just toggle it
 	if(i < m_analogChannelCount)
 	{
-		switch(m_modelid)
-		{
-			// --------------------------------------------------
-			case MODEL_SIGLENT_SDS2000XP:
-				sendOnly(":CHANNEL%d:SWITCH ON", i + 1);
-				break;
-			// --------------------------------------------------
-			default:
-				LogError("Unknown scope type\n");
-				break;
-				// --------------------------------------------------
-		}
+		sendOnly(":CHANNEL%d:SWITCH ON", i + 1);
 	}
 	else
 	{
@@ -427,23 +394,9 @@ void SiglentMinOscilloscope::DisableChannel(size_t i)
 		m_channelsEnabled[i] = false;
 	}
 
+	//If this is an analog channel, just toggle it
 	if(i < m_analogChannelCount)
-	{
-		switch(m_modelid)
-		{
-			// -------------------------------------------------
-			case MODEL_SIGLENT_SDS2000XP:
-				//If this is an analog channel, just toggle it
-				if(i < m_analogChannelCount)
-					sendOnly(":CHANNEL%d:SWITCH OFF", i + 1);
-				break;
-			// --------------------------------------------------
-			default:
-				LogError("Unknown scope type\n");
-				break;
-				// --------------------------------------------------
-		}
-	}
+		sendOnly(":CHANNEL%d:SWITCH OFF", i + 1);
 
 	//Sample rate and memory depth can change if interleaving state changed
 	if(IsInterleaving() != wasInterleaving)
@@ -457,22 +410,11 @@ vector<OscilloscopeChannel::CouplingType> SiglentMinOscilloscope::GetAvailableCo
 {
 	vector<OscilloscopeChannel::CouplingType> ret;
 
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			ret.push_back(OscilloscopeChannel::COUPLE_DC_1M);
-			ret.push_back(OscilloscopeChannel::COUPLE_AC_1M);
-			ret.push_back(OscilloscopeChannel::COUPLE_DC_50);
-			ret.push_back(OscilloscopeChannel::COUPLE_AC_50);
-			ret.push_back(OscilloscopeChannel::COUPLE_GND);
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	ret.push_back(OscilloscopeChannel::COUPLE_DC_1M);
+	ret.push_back(OscilloscopeChannel::COUPLE_AC_1M);
+	ret.push_back(OscilloscopeChannel::COUPLE_DC_50);
+	ret.push_back(OscilloscopeChannel::COUPLE_AC_50);
+	ret.push_back(OscilloscopeChannel::COUPLE_GND);
 	return ret;
 }
 
@@ -483,26 +425,15 @@ OscilloscopeChannel::CouplingType SiglentMinOscilloscope::GetChannelCoupling(siz
 
 	m_probeIsActive[i] = false;
 
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			replyType = Trim(converse(":CHANNEL%d:COUPLING?", i + 1).substr(0, 2));
-			replyImp = Trim(converse(":CHANNEL%d:IMPEDANCE?", i + 1).substr(0, 3));
+	replyType = Trim(converse(":CHANNEL%d:COUPLING?", i + 1).substr(0, 2));
+	replyImp = Trim(converse(":CHANNEL%d:IMPEDANCE?", i + 1).substr(0, 3));
 
-			if(replyType == "AC")
-				return (replyImp.find("FIF") == 0) ? OscilloscopeChannel::COUPLE_AC_50 : OscilloscopeChannel::COUPLE_AC_1M;
-			else if(replyType == "DC")
-				return (replyImp.find("FIF") == 0) ? OscilloscopeChannel::COUPLE_DC_50 : OscilloscopeChannel::COUPLE_DC_1M;
-			else if(replyType == "GN")
-				return OscilloscopeChannel::COUPLE_GND;
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	if(replyType == "AC")
+		return (replyImp.find("FIF") == 0) ? OscilloscopeChannel::COUPLE_AC_50 : OscilloscopeChannel::COUPLE_AC_1M;
+	else if(replyType == "DC")
+		return (replyImp.find("FIF") == 0) ? OscilloscopeChannel::COUPLE_DC_50 : OscilloscopeChannel::COUPLE_DC_1M;
+	else if(replyType == "GN")
+		return OscilloscopeChannel::COUPLE_GND;
 
 	//invalid
 	LogWarning("SiglentMinOscilloscope::GetChannelCoupling got invalid coupling [%s] [%s]\n",
@@ -524,44 +455,33 @@ void SiglentMinOscilloscope::SetChannelCoupling(size_t i, OscilloscopeChannel::C
 	if(m_probeIsActive[i])
 		return;
 
-	switch(m_modelid)
+	switch(type)
 	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			switch(type)
-			{
-				case OscilloscopeChannel::COUPLE_AC_1M:
-					sendOnly(":CHANNEL%d:COUPLING AC", i + 1);
-					sendOnly(":CHANNEL%d:IMPEDANCE ONEMEG", i + 1);
-					break;
-
-				case OscilloscopeChannel::COUPLE_DC_1M:
-					sendOnly(":CHANNEL%d:COUPLING DC", i + 1);
-					sendOnly(":CHANNEL%d:IMPEDANCE ONEMEG", i + 1);
-					break;
-
-				case OscilloscopeChannel::COUPLE_DC_50:
-					sendOnly(":CHANNEL%d:COUPLING DC", i + 1);
-					sendOnly(":CHANNEL%d:IMPEDANCE FIFTY", i + 1);
-					break;
-
-				case OscilloscopeChannel::COUPLE_AC_50:
-					sendOnly(":CHANNEL%d:COUPLING AC", i + 1);
-					sendOnly(":CHANNEL%d:IMPEDANCE FIFTY", i + 1);
-					break;
-
-				//treat unrecognized as ground
-				case OscilloscopeChannel::COUPLE_GND:
-				default:
-					sendOnly(":CHANNEL%d:COUPLING GND", i + 1);
-					break;
-			}
+		case OscilloscopeChannel::COUPLE_AC_1M:
+			sendOnly(":CHANNEL%d:COUPLING AC", i + 1);
+			sendOnly(":CHANNEL%d:IMPEDANCE ONEMEG", i + 1);
 			break;
-		// --------------------------------------------------
+
+		case OscilloscopeChannel::COUPLE_DC_1M:
+			sendOnly(":CHANNEL%d:COUPLING DC", i + 1);
+			sendOnly(":CHANNEL%d:IMPEDANCE ONEMEG", i + 1);
+			break;
+
+		case OscilloscopeChannel::COUPLE_DC_50:
+			sendOnly(":CHANNEL%d:COUPLING DC", i + 1);
+			sendOnly(":CHANNEL%d:IMPEDANCE FIFTY", i + 1);
+			break;
+
+		case OscilloscopeChannel::COUPLE_AC_50:
+			sendOnly(":CHANNEL%d:COUPLING AC", i + 1);
+			sendOnly(":CHANNEL%d:IMPEDANCE FIFTY", i + 1);
+			break;
+
+		//treat unrecognized as ground
+		case OscilloscopeChannel::COUPLE_GND:
 		default:
-			LogError("Unknown scope type\n");
+			sendOnly(":CHANNEL%d:COUPLING GND", i + 1);
 			break;
-			// --------------------------------------------------
 	}
 }
 
@@ -569,18 +489,7 @@ double SiglentMinOscilloscope::GetChannelAttenuation(size_t i)
 {
 	string reply;
 
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			reply = converse(":CHANNEL%d:PROBE?", i + 1);
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	reply = converse(":CHANNEL%d:PROBE?", i + 1);
 
 	double d;
 	sscanf(reply.c_str(), "%lf", &d);
@@ -600,67 +509,29 @@ void SiglentMinOscilloscope::SetChannelAttenuation(size_t i, double atten)
 			return;
 	}
 
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			sendOnly(":CHANNEL%d:PROBE VALUE,%1.2E", i + 1, atten);
-			break;
-
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	sendOnly(":CHANNEL%d:PROBE VALUE,%1.2E", i + 1, atten);
 }
 
 vector<unsigned int> SiglentMinOscilloscope::GetChannelBandwidthLimiters(size_t /*i*/)
 {
 	vector<unsigned int> ret;
 
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			//"no limit"
-			ret.push_back(0);
+	//"no limit"
+	ret.push_back(0);
 
-			//20M
-			ret.push_back(20);
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	//20M
+	ret.push_back(20);
 
 	return ret;
 }
 
 unsigned int SiglentMinOscilloscope::GetChannelBandwidthLimit(size_t i)
 {
-	string reply;
-
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			reply = converse(":CHANNEL%d:BWLIMIT?", i + 1);
-			if(reply == "FULL")
-				return 0;
-			else if(reply == "20M")
-				return 20;
-			else if(reply == "200M")
-				return 200;
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	string reply = converse(":CHANNEL%d:BWLIMIT?", i + 1);
+	if(reply == "FULL")
+		return 0;
+	else if(reply == "20M")
+		return 20;
 
 	LogWarning("SiglentMinOscilloscope::GetChannelCoupling got invalid bwlimit %s\n", reply.c_str());
 	return 0;
@@ -668,33 +539,22 @@ unsigned int SiglentMinOscilloscope::GetChannelBandwidthLimit(size_t i)
 
 void SiglentMinOscilloscope::SetChannelBandwidthLimit(size_t i, unsigned int limit_mhz)
 {
-	switch(m_modelid)
+	switch(limit_mhz)
 	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			switch(limit_mhz)
-			{
-				case 0:
-					sendOnly(":CHANNEL%d:BWLIMIT FULL", i + 1);
-					break;
-
-				case 20:
-					sendOnly(":CHANNEL%d:BWLIMIT 20M", i + 1);
-					break;
-
-				case 200:
-					sendOnly(":CHANNEL%d:BWLIMIT 200M", i + 1);
-					break;
-
-				default:
-					LogWarning("SiglentMinOscilloscope::invalid bwlimit set request (%dMhz)\n", limit_mhz);
-			}
+		case 0:
+			sendOnly(":CHANNEL%d:BWLIMIT FULL", i + 1);
 			break;
-		// --------------------------------------------------
+
+		case 20:
+			sendOnly(":CHANNEL%d:BWLIMIT 20M", i + 1);
+			break;
+
+		case 200:
+			sendOnly(":CHANNEL%d:BWLIMIT 200M", i + 1);
+			break;
+
 		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
+			LogWarning("SiglentMinOscilloscope::invalid bwlimit set request (%dMhz)\n", limit_mhz);
 	}
 }
 
@@ -709,18 +569,7 @@ void SiglentMinOscilloscope::Invert(size_t i, bool invert)
 	if(i >= m_analogChannelCount)
 		return;
 
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			sendOnly(":CHANNEL%d:INVERT %s", i + 1, invert ? "ON" : "OFF");
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	sendOnly(":CHANNEL%d:INVERT %s", i + 1, invert ? "ON" : "OFF");
 }
 
 bool SiglentMinOscilloscope::IsInverted(size_t i)
@@ -728,21 +577,7 @@ bool SiglentMinOscilloscope::IsInverted(size_t i)
 	if(i >= m_analogChannelCount)
 		return false;
 
-	string reply;
-
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			reply = Trim(converse(":CHANNEL%d:INVERT?", i + 1));
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			reply = "";
-			break;
-			// --------------------------------------------------
-	}
+	string reply = Trim(converse(":CHANNEL%d:INVERT?", i + 1));
 	return (reply == "ON");
 }
 
@@ -752,27 +587,15 @@ void SiglentMinOscilloscope::SetChannelDisplayName(size_t i, string name)
 	if(!chan)
 		return;
 
-	//Update in hardware
-	switch(m_modelid)
+	if(i < m_analogChannelCount)
 	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			if(i < m_analogChannelCount)
-			{
-				sendOnly(":CHANNEL%ld:LABEL:TEXT \"%s\"", i + 1, name.c_str());
-				sendOnly(":CHANNEL%ld:LABEL ON", i + 1);
-			}
-			//else
-			//{
-			//	sendOnly(":DIGITAL:LABEL%ld \"%s\"", i - (m_analogChannelCount + 1), name.c_str());
-			//}
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
+		sendOnly(":CHANNEL%ld:LABEL:TEXT \"%s\"", i + 1, name.c_str());
+		sendOnly(":CHANNEL%ld:LABEL ON", i + 1);
 	}
+	//else
+	//{
+	//	sendOnly(":DIGITAL:LABEL%ld \"%s\"", i - (m_analogChannelCount + 1), name.c_str());
+	//}
 }
 
 string SiglentMinOscilloscope::GetChannelDisplayName(size_t i)
@@ -785,32 +608,20 @@ string SiglentMinOscilloscope::GetChannelDisplayName(size_t i)
 	//Because clean, orthogonal APIs are apparently for losers?
 	string name = "";
 
-	switch(m_modelid)
+	if(i < m_analogChannelCount)
 	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			if(i < m_analogChannelCount)
-			{
-				name = converse(":CHANNEL%d:LABEL:TEXT?", i + 1);
-				// Remove "'s around the name
-				if(name.length() > 2)
-					name = name.substr(1, name.length() - 2);
-			}
-			//else
-			//{
-			//	name = converse(":DIGITAL:LABEL%d?", i - (m_analogChannelCount + 1));
-			//	// Remove "'s around the name
-			//	if(name.length() > 2)
-			//		name = name.substr(1, name.length() - 2);
-			//}
-			break;
-
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
+		name = converse(":CHANNEL%d:LABEL:TEXT?", i + 1);
+		// Remove "'s around the name
+		if(name.length() > 2)
+			name = name.substr(1, name.length() - 2);
 	}
+	//else
+	//{
+	//	name = converse(":DIGITAL:LABEL%d?", i - (m_analogChannelCount + 1));
+	//	// Remove "'s around the name
+	//	if(name.length() > 2)
+	//		name = name.substr(1, name.length() - 2);
+	//}
 
 	//Default to using hwname if no alias defined
 	if(name == "")
@@ -840,18 +651,7 @@ Oscilloscope::TriggerMode SiglentMinOscilloscope::PollTrigger()
 		return TRIGGER_MODE_TRIGGERED;
 	}
 
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			sinr = converse(":TRIGGER:STATUS?");
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	sinr = converse(":TRIGGER:STATUS?");
 
 	//No waveform, but ready for one?
 	if((sinr == "Arm") || (sinr == "Ready"))
@@ -1197,135 +997,123 @@ bool SiglentMinOscilloscope::AcquireData()
 	unsigned int firstEnabledChannel = UINT_MAX;
 	bool any_enabled = true;
 
-	switch(m_modelid)
+	if(!ReadWavedescs(m_wavedescs, enabled, firstEnabledChannel, any_enabled))
+		return false;
+
+	//Grab the WAVEDESC from the first enabled channel
+	for(unsigned int i = 0; i < m_analogChannelCount; i++)
 	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			if(!ReadWavedescs(m_wavedescs, enabled, firstEnabledChannel, any_enabled))
-				return false;
-
-			//Grab the WAVEDESC from the first enabled channel
-			for(unsigned int i = 0; i < m_analogChannelCount; i++)
-			{
-				if(enabled[i] || (!any_enabled && i == 0))
-				{
-					pdesc = (unsigned char*)(&m_wavedescs[i][0]);
-					break;
-				}
-			}
-
-			//TODO: See if any digital channels are enabled
-
-			//Pull sequence count out of the WAVEDESC if we have analog channels active
-			if(pdesc)
-			{
-				uint32_t trigtime_len = *reinterpret_cast<uint32_t*>(pdesc + 48);
-				if(trigtime_len > 0)
-					num_sequences = trigtime_len / 16;
-			}
-
-			//No WAVEDESCs, look at digital channels
-			else
-			{
-				//TODO: support sequence capture of digital channels if the instrument supports this
-				//(need to look into it)
-				if(denabled)
-					num_sequences = 1;
-
-				//no enabled channels. abort
-				else
-					return false;
-			}
-
-			//Request waveforms for all analog channels
-			for(unsigned int i = 0; i < m_analogChannelCount; i++)
-			{
-				if(enabled[i])
-				{
-					m_transport->SendCommandQueued(":WAVEFORM:SOURCE C" + to_string(i + 1) + ";:WAVEFORM:DATA?");
-				}
-			}
-			m_transport->FlushCommandQueue();
-
-			if(pdesc)
-			{
-				//Figure out when the first trigger happened.
-				//Read the timestamps if we're doing segmented capture
-				ttime = ExtractTimestamp(pdesc, basetime);
-				if(num_sequences > 1)
-					wavetime = m_transport->ReadReply();
-				pwtime = reinterpret_cast<double*>(&wavetime[16]);	  //skip 16-byte SCPI header
-
-				//QUIRK: On SDS2000X+ with firmware 1.3.9R6 and older, the SCPI length header reports the
-				//sample count rather than size in bytes! Firmware 1.3.9R10 and newer reports size in bytes.
-				//2000X+ HD running firmware 1.1.7.0 seems to report size in bytes.
-				bool hdWorkaround = m_requireSizeWorkaround && m_highDefinition;
-
-				//Read the data from each analog waveform
-				for(unsigned int i = 0; i < m_analogChannelCount; i++)
-				{
-					if(enabled[i])
-					{
-						m_analogWaveformDataSize[i] = ReadWaveformBlock(WAVEFORM_SIZE, m_analogWaveformData[i], hdWorkaround);
-						// This is the 0x0a0a at the end
-						m_transport->ReadRawData(2, (unsigned char*)tmp);
-					}
-				}
-			}
-
-			//TODO: Read the data from the digital waveforms, if enabled
-			//if(denabled)
-			//{
-			//	if(!ReadWaveformBlock(WAVEFORM_SIZE, m_digitalWaveformDataBytes))
-			//	{
-			//		LogDebug("failed to download digital waveform\n");
-			//		return false;
-			//	}
-			//}
-
-			//At this point all data has been read so the scope is free to go do its thing while we crunch the results.
-			//Re-arm the trigger if not in one-shot mode
-			if(!m_triggerOneShot)
-			{
-				sendOnly(":TRIGGER:MODE SINGLE");
-				m_transport->FlushCommandQueue();
-				m_triggerArmed = true;
-			}
-
-			//Process analog waveforms
-			waveforms.resize(m_analogChannelCount);
-			for(unsigned int i = 0; i < m_analogChannelCount; i++)
-			{
-				if(enabled[i])
-				{
-					waveforms[i] = ProcessAnalogWaveform(&m_analogWaveformData[i][0],
-						m_analogWaveformDataSize[i],
-						&m_wavedescs[i][0],
-						num_sequences,
-						ttime,
-						basetime,
-						pwtime,
-						i);
-				}
-			}
-
-			//Save analog waveform data
-			for(unsigned int i = 0; i < m_analogChannelCount; i++)
-			{
-				if(!enabled[i])
-					continue;
-
-				//Done, update the data
-				for(size_t j = 0; j < num_sequences; j++)
-					pending_waveforms[i].push_back(waveforms[i][j]);
-			}
+		if(enabled[i] || (!any_enabled && i == 0))
+		{
+			pdesc = (unsigned char*)(&m_wavedescs[i][0]);
 			break;
+		}
+	}
 
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
+	//TODO: See if any digital channels are enabled
+
+	//Pull sequence count out of the WAVEDESC if we have analog channels active
+	if(pdesc)
+	{
+		uint32_t trigtime_len = *reinterpret_cast<uint32_t*>(pdesc + 48);
+		if(trigtime_len > 0)
+			num_sequences = trigtime_len / 16;
+	}
+
+	//No WAVEDESCs, look at digital channels
+	else
+	{
+		//TODO: support sequence capture of digital channels if the instrument supports this
+		//(need to look into it)
+		if(denabled)
+			num_sequences = 1;
+
+		//no enabled channels. abort
+		else
+			return false;
+	}
+
+	//Request waveforms for all analog channels
+	for(unsigned int i = 0; i < m_analogChannelCount; i++)
+	{
+		if(enabled[i])
+		{
+			m_transport->SendCommandQueued(":WAVEFORM:SOURCE C" + to_string(i + 1) + ";:WAVEFORM:DATA?");
+		}
+	}
+	m_transport->FlushCommandQueue();
+
+	if(pdesc)
+	{
+		//Figure out when the first trigger happened.
+		//Read the timestamps if we're doing segmented capture
+		ttime = ExtractTimestamp(pdesc, basetime);
+		if(num_sequences > 1)
+			wavetime = m_transport->ReadReply();
+		pwtime = reinterpret_cast<double*>(&wavetime[16]);	  //skip 16-byte SCPI header
+
+		//QUIRK: On SDS2000X+ with firmware 1.3.9R6 and older, the SCPI length header reports the
+		//sample count rather than size in bytes! Firmware 1.3.9R10 and newer reports size in bytes.
+		//2000X+ HD running firmware 1.1.7.0 seems to report size in bytes.
+		bool hdWorkaround = m_requireSizeWorkaround && m_highDefinition;
+
+		//Read the data from each analog waveform
+		for(unsigned int i = 0; i < m_analogChannelCount; i++)
+		{
+			if(enabled[i])
+			{
+				m_analogWaveformDataSize[i] = ReadWaveformBlock(WAVEFORM_SIZE, m_analogWaveformData[i], hdWorkaround);
+				// This is the 0x0a0a at the end
+				m_transport->ReadRawData(2, (unsigned char*)tmp);
+			}
+		}
+	}
+
+	//TODO: Read the data from the digital waveforms, if enabled
+	//if(denabled)
+	//{
+	//	if(!ReadWaveformBlock(WAVEFORM_SIZE, m_digitalWaveformDataBytes))
+	//	{
+	//		LogDebug("failed to download digital waveform\n");
+	//		return false;
+	//	}
+	//}
+
+	//At this point all data has been read so the scope is free to go do its thing while we crunch the results.
+	//Re-arm the trigger if not in one-shot mode
+	if(!m_triggerOneShot)
+	{
+		sendOnly(":TRIGGER:MODE SINGLE");
+		m_transport->FlushCommandQueue();
+		m_triggerArmed = true;
+	}
+
+	//Process analog waveforms
+	waveforms.resize(m_analogChannelCount);
+	for(unsigned int i = 0; i < m_analogChannelCount; i++)
+	{
+		if(enabled[i])
+		{
+			waveforms[i] = ProcessAnalogWaveform(&m_analogWaveformData[i][0],
+				m_analogWaveformDataSize[i],
+				&m_wavedescs[i][0],
+				num_sequences,
+				ttime,
+				basetime,
+				pwtime,
+				i);
+		}
+	}
+
+	//Save analog waveform data
+	for(unsigned int i = 0; i < m_analogChannelCount; i++)
+	{
+		if(!enabled[i])
+			continue;
+
+		//Done, update the data
+		for(size_t j = 0; j < num_sequences; j++)
+			pending_waveforms[i].push_back(waveforms[i][j]);
 	}
 
 	//TODO: proper support for sequenced capture when digital channels are active
@@ -1359,19 +1147,8 @@ bool SiglentMinOscilloscope::AcquireData()
 
 void SiglentMinOscilloscope::Start()
 {
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			sendOnly(":TRIGGER:MODE STOP");
-			sendOnly(":TRIGGER:MODE SINGLE");	 //always do single captures, just re-trigger
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	sendOnly(":TRIGGER:MODE STOP");
+	sendOnly(":TRIGGER:MODE SINGLE");	 //always do single captures, just re-trigger
 	m_transport->FlushCommandQueue();
 
 	m_triggerArmed = true;
@@ -1380,20 +1157,8 @@ void SiglentMinOscilloscope::Start()
 
 void SiglentMinOscilloscope::StartSingleTrigger()
 {
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			sendOnly(":TRIGGER:MODE STOP");
-			sendOnly(":TRIGGER:MODE SINGLE");
-			break;
-
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	sendOnly(":TRIGGER:MODE STOP");
+	sendOnly(":TRIGGER:MODE SINGLE");
 	m_transport->FlushCommandQueue();
 
 	m_triggerArmed = true;
@@ -1402,18 +1167,7 @@ void SiglentMinOscilloscope::StartSingleTrigger()
 
 void SiglentMinOscilloscope::Stop()
 {
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			m_transport->SendCommandQueued(":TRIGGER:MODE STOP");
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	m_transport->SendCommandQueued(":TRIGGER:MODE STOP");
 	m_transport->FlushCommandQueue();
 
 	m_triggerArmed = false;
@@ -1428,18 +1182,7 @@ void SiglentMinOscilloscope::ForceTrigger()
 
 	m_triggerForced = true;
 
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			sendOnly(":TRIGGER:MODE FTRIG");
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	sendOnly(":TRIGGER:MODE FTRIG");
 	m_transport->FlushCommandQueue();
 
 	m_triggerArmed = true;
@@ -1459,20 +1202,7 @@ float SiglentMinOscilloscope::GetChannelOffset(size_t i, size_t /*stream*/)
 			return m_channelOffsets[i];
 	}
 
-	string reply;
-
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			reply = converse(":CHANNEL%ld:OFFSET?", i + 1);
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	string reply = converse(":CHANNEL%ld:OFFSET?", i + 1);
 
 	float offset;
 	sscanf(reply.c_str(), "%f", &offset);
@@ -1488,20 +1218,7 @@ void SiglentMinOscilloscope::SetChannelOffset(size_t i, size_t /*stream*/, float
 	if(i > m_analogChannelCount)
 		return;
 
-	{
-		switch(m_modelid)
-		{
-			// --------------------------------------------------
-			case MODEL_SIGLENT_SDS2000XP:
-				sendOnly(":CHANNEL%ld:OFFSET %1.2E", i + 1, offset);
-				break;
-			// --------------------------------------------------
-			default:
-				LogError("Unknown scope type\n");
-				break;
-				// --------------------------------------------------
-		}
-	}
+	sendOnly(":CHANNEL%ld:OFFSET %1.2E", i + 1, offset);
 
 	lock_guard<recursive_mutex> lock(m_cacheMutex);
 	m_channelOffsets[i] = offset;
@@ -1519,20 +1236,7 @@ float SiglentMinOscilloscope::GetChannelVoltageRange(size_t i, size_t /*stream*/
 			return m_channelVoltageRanges[i];
 	}
 
-	string reply;
-
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			reply = converse(":CHANNEL%d:SCALE?", i + 1);
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	string reply = converse(":CHANNEL%d:SCALE?", i + 1);
 
 	float volts_per_div;
 	sscanf(reply.c_str(), "%f", &volts_per_div);
@@ -1548,53 +1252,33 @@ void SiglentMinOscilloscope::SetChannelVoltageRange(size_t i, size_t /*stream*/,
 	float vdiv = range / 8;
 	m_channelVoltageRanges[i] = range;
 
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			sendOnly(":CHANNEL%ld:SCALE %.4f", i + 1, vdiv);
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	sendOnly(":CHANNEL%ld:SCALE %.4f", i + 1, vdiv);
 }
 
 vector<uint64_t> SiglentMinOscilloscope::GetSampleRatesNonInterleaved()
 {
 	vector<uint64_t> ret;
-	switch(m_modelid)
+	
+	//SDS2000X+
+	ret =
 	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			ret =
-			{
-				10 * 1000,
-				20 * 1000,
-				50 * 1000,
-				100 * 1000,
-				200 * 1000,
-				500 * 1000,
-				1 * 1000 * 1000,
-				2 * 1000 * 1000,
-				5 * 1000 * 1000,
-				10 * 1000 * 1000,
-				20 * 1000 * 1000,
-				50 * 1000 * 1000,
-				100 * 1000 * 1000,
-				200 * 1000 * 1000,
-				500 * 1000 * 1000,
-				1 * 1000 * 1000 * 1000
-			};
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+		10 * 1000,
+		20 * 1000,
+		50 * 1000,
+		100 * 1000,
+		200 * 1000,
+		500 * 1000,
+		1 * 1000 * 1000,
+		2 * 1000 * 1000,
+		5 * 1000 * 1000,
+		10 * 1000 * 1000,
+		20 * 1000 * 1000,
+		50 * 1000 * 1000,
+		100 * 1000 * 1000,
+		200 * 1000 * 1000,
+		500 * 1000 * 1000,
+		1 * 1000 * 1000 * 1000
+	};
 
 	return ret;
 }
@@ -1611,26 +1295,14 @@ vector<uint64_t> SiglentMinOscilloscope::GetSampleDepthsNonInterleaved()
 {
 	vector<uint64_t> ret = {};
 
-	switch(m_modelid)
+	//SDS2000X+
+	ret =
 	{
-		// --------------------------------------------------
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			ret =
-			{
-				10 * 1000,			//10k
-				100 * 1000,			//100k
-				1000 * 1000,		//1M
-				10 * 1000 * 1000	//10M
-			};
-			break;
-
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+		10 * 1000,			//10k
+		100 * 1000,			//100k
+		1000 * 1000,		//1M
+		10 * 1000 * 1000	//10M
+	};
 	return ret;
 }
 
@@ -1660,20 +1332,7 @@ uint64_t SiglentMinOscilloscope::GetSampleRate()
 	double f;
 	if(!m_sampleRateValid)
 	{
-		string reply;
-		switch(m_modelid)
-		{
-			// --------------------------------------------------
-			case MODEL_SIGLENT_SDS2000XP:
-				reply = converse(":ACQUIRE:SRATE?");
-				break;
-			// --------------------------------------------------
-			default:
-				LogError("Unknown scope type\n");
-				break;
-				// --------------------------------------------------
-		}
-
+		string reply = converse(":ACQUIRE:SRATE?");
 		sscanf(reply.c_str(), "%lf", &f);
 		m_sampleRate = static_cast<int64_t>(f);
 		m_sampleRateValid = true;
@@ -1690,19 +1349,7 @@ uint64_t SiglentMinOscilloscope::GetSampleDepth()
 		// not the *actual* memory depth....we don't know that until we've collected samples
 
 		// What you see below is the only observed method that seems to reliably get the *actual* memory depth.
-		string reply;
-		switch(m_modelid)
-		{
-			// --------------------------------------------------
-			case MODEL_SIGLENT_SDS2000XP:
-				reply = converse(":ACQUIRE:MDEPTH?");
-				break;
-			// --------------------------------------------------
-			default:
-				LogError("Unknown scope type\n");
-				break;
-				// --------------------------------------------------
-		}
+		string reply = converse(":ACQUIRE:MDEPTH?");
 		f = Unit(Unit::UNIT_SAMPLEDEPTH).ParseString(reply);
 		m_memoryDepth = static_cast<int64_t>(f);
 		m_memoryDepthValid = true;
@@ -1718,69 +1365,59 @@ void SiglentMinOscilloscope::SetSampleDepth(uint64_t depth)
 	//save original sample rate (scope often changes sample rate when adjusting memory depth)
 	uint64_t rate = GetSampleRate();
 
-	switch(m_modelid)
+	// we can not change memory size in Run/Stop mode
+	sendOnly("TRIG_MODE AUTO");
+
+	switch(depth)
 	{
-		case MODEL_SIGLENT_SDS2000XP:
-			// we can not change memory size in Run/Stop mode
-			sendOnly("TRIG_MODE AUTO");
-
-			switch(depth)
-			{
-				case 10000:
-					sendOnly("ACQUIRE:MDEPTH 10k");
-					break;
-				case 20000:
-					sendOnly("ACQUIRE:MDEPTH 20k");
-					break;
-				case 100000:
-					sendOnly("ACQUIRE:MDEPTH 100k");
-					break;
-				case 200000:
-					sendOnly("ACQUIRE:MDEPTH 200k");
-					break;
-				case 1000000:
-					sendOnly("ACQUIRE:MDEPTH 1M");
-					break;
-				case 2000000:
-					sendOnly("ACQUIRE:MDEPTH 2M");
-					break;
-				case 10000000:
-					sendOnly("ACQUIRE:MDEPTH 10M");
-					break;
-
-				// We don't yet support memory depths that need to be transferred in chunks
-				case 20000000:
-				//sendOnly("ACQUIRE:MDEPTH 20M");
-				//	break;
-				case 50000000:
-				//	sendOnly("ACQUIRE:MDEPTH 50M");
-				//	break;
-				case 100000000:
-				//	sendOnly("ACQUIRE:MDEPTH 100M");
-				//	break;
-				case 200000000:
-				//	sendOnly("ACQUIRE:MDEPTH 200M");
-				//	break;
-				default:
-					LogError("Invalid memory depth for channel: %lu\n", depth);
-			}
-
-			if(IsTriggerArmed())
-			{
-				// restart trigger
-				sendOnly("TRIG_MODE SINGLE");
-			}
-			else
-			{
-				// change to stop mode
-				sendOnly("TRIG_MODE STOP");
-			}
+		case 10000:
+			sendOnly("ACQUIRE:MDEPTH 10k");
 			break;
-		// --------------------------------------------------
+		case 20000:
+			sendOnly("ACQUIRE:MDEPTH 20k");
+			break;
+		case 100000:
+			sendOnly("ACQUIRE:MDEPTH 100k");
+			break;
+		case 200000:
+			sendOnly("ACQUIRE:MDEPTH 200k");
+			break;
+		case 1000000:
+			sendOnly("ACQUIRE:MDEPTH 1M");
+			break;
+		case 2000000:
+			sendOnly("ACQUIRE:MDEPTH 2M");
+			break;
+		case 10000000:
+			sendOnly("ACQUIRE:MDEPTH 10M");
+			break;
+
+		// We don't yet support memory depths that need to be transferred in chunks
+		case 20000000:
+		//sendOnly("ACQUIRE:MDEPTH 20M");
+		//	break;
+		case 50000000:
+		//	sendOnly("ACQUIRE:MDEPTH 50M");
+		//	break;
+		case 100000000:
+		//	sendOnly("ACQUIRE:MDEPTH 100M");
+		//	break;
+		case 200000000:
+		//	sendOnly("ACQUIRE:MDEPTH 200M");
+		//	break;
 		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
+			LogError("Invalid memory depth for channel: %lu\n", depth);
+	}
+
+	if(IsTriggerArmed())
+	{
+		// restart trigger
+		sendOnly("TRIG_MODE SINGLE");
+	}
+	else
+	{
+		// change to stop mode
+		sendOnly("TRIG_MODE STOP");
 	}
 
 	m_memoryDepthValid = false;
@@ -1798,18 +1435,7 @@ void SiglentMinOscilloscope::SetSampleRate(uint64_t rate)
 	double sampletime = GetSampleDepth() / (double)rate;
 	double scale = sampletime / 10;
 
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			sendOnly(":TIMEBASE:SCALE %1.2E", scale);
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	sendOnly(":TIMEBASE:SCALE %1.2E", scale);
 	m_memoryDepthValid = false;
 }
 
@@ -1831,18 +1457,7 @@ void SiglentMinOscilloscope::SetTriggerOffset(int64_t offset)
 	int64_t halfdepth = GetSampleDepth() / 2;
 	int64_t halfwidth = static_cast<int64_t>(round(FS_PER_SECOND * halfdepth / rate));
 
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			sendOnly(":TIMEBASE:DELAY %1.2E", (halfwidth - offset) * SECONDS_PER_FS);
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	sendOnly(":TIMEBASE:DELAY %1.2E", (halfwidth - offset) * SECONDS_PER_FS);
 
 	//Don't update the cache because the scope is likely to round the offset we ask for.
 	//If we query the instrument later, the cache will be updated then.
@@ -1858,21 +1473,7 @@ int64_t SiglentMinOscilloscope::GetTriggerOffset()
 		if(m_triggerOffsetValid)
 			return m_triggerOffset;
 	}
-	string reply;
-	{
-		switch(m_modelid)
-		{
-			// --------------------------------------------------
-			case MODEL_SIGLENT_SDS2000XP:
-				reply = converse(":TIMEBASE:DELAY?");
-				break;
-			// --------------------------------------------------
-			default:
-				LogError("Unknown scope type\n");
-				break;
-				// --------------------------------------------------
-		}
-	}
+	string reply = converse(":TIMEBASE:DELAY?");
 
 	lock_guard<recursive_mutex> lock(m_cacheMutex);
 
@@ -1898,18 +1499,7 @@ void SiglentMinOscilloscope::SetDeskewForChannel(size_t channel, int64_t skew)
 	if(channel >= m_analogChannelCount)
 		return;
 
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			sendOnly(":CHANNEL%ld:SKEW %1.2E", channel, skew * SECONDS_PER_FS);
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	sendOnly(":CHANNEL%ld:SKEW %1.2E", channel, skew * SECONDS_PER_FS);
 
 	//Update cache
 	lock_guard<recursive_mutex> lock2(m_cacheMutex);
@@ -1930,20 +1520,7 @@ int64_t SiglentMinOscilloscope::GetDeskewForChannel(size_t channel)
 	}
 
 	//Read the deskew
-	string reply;
-
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			reply = converse(":CHANNEL%ld:SKEW?", channel + 1);
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	string reply = converse(":CHANNEL%ld:SKEW?", channel + 1);
 
 	//Value comes back as floating point ps
 	float skew;
@@ -1958,27 +1535,17 @@ int64_t SiglentMinOscilloscope::GetDeskewForChannel(size_t channel)
 
 bool SiglentMinOscilloscope::IsInterleaving()
 {
-	switch(m_modelid)
+	if((m_channelsEnabled[0] == true) && (m_channelsEnabled[1] == true))
 	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			if((m_channelsEnabled[0] == true) && (m_channelsEnabled[1] == true))
-			{
-				// Channel 1 and 2
-				return false;
-			}
-			else if((m_channelsEnabled[3] == true) && (m_channelsEnabled[4] == true))
-			{
-				// Channel 3 and 4
-				return false;
-			}
-			return true;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			return false;
-			// --------------------------------------------------
+		// Channel 1 and 2
+		return false;
 	}
+	else if((m_channelsEnabled[3] == true) && (m_channelsEnabled[4] == true))
+	{
+		// Channel 3 and 4
+		return false;
+	}
+	return true;
 }
 
 bool SiglentMinOscilloscope::SetInterleaving(bool /* combine*/)
@@ -1994,33 +1561,21 @@ void SiglentMinOscilloscope::PullTrigger()
 {
 	std::string reply;
 
-	switch(m_modelid)
+	//Figure out what kind of trigger is active.
+	reply = Trim(converse(":TRIGGER:TYPE?"));
+	if(reply == "EDGE")
+		PullEdgeTrigger();
+	else
 	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			//Figure out what kind of trigger is active.
-			reply = Trim(converse(":TRIGGER:TYPE?"));
-			if(reply == "EDGE")
-				PullEdgeTrigger();
-			else
-			{
-				LogWarning("Unsupported trigger type \"%s\"\n", reply.c_str());
-				m_trigger = NULL;
-				return;
-			}
-
-			//Pull the source
-			PullTriggerSource(m_trigger, reply);
-
-			//TODO: holdoff
-			break;
-
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
+		LogWarning("Unsupported trigger type \"%s\"\n", reply.c_str());
+		m_trigger = NULL;
+		return;
 	}
+
+	//Pull the source
+	PullTriggerSource(m_trigger, reply);
+
+	//TODO: holdoff
 }
 
 /**
@@ -2052,24 +1607,13 @@ void SiglentMinOscilloscope::PullEdgeTrigger()
 		m_trigger = new EdgeTrigger(this);
 	EdgeTrigger* et = dynamic_cast<EdgeTrigger*>(m_trigger);
 
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			//Level
-			et->SetLevel(stof(converse(":TRIGGER:EDGE:LEVEL?")));
+	//Level
+	et->SetLevel(stof(converse(":TRIGGER:EDGE:LEVEL?")));
 
-			//TODO: OptimizeForHF (changes hysteresis for fast signals)
+	//TODO: OptimizeForHF (changes hysteresis for fast signals)
 
-			//Slope
-			GetTriggerSlope(et, Trim(converse(":TRIGGER:EDGE:SLOPE?")));
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	//Slope
+	GetTriggerSlope(et, Trim(converse(":TRIGGER:EDGE:SLOPE?")));
 }
 
 /**
@@ -2080,25 +1624,14 @@ void SiglentMinOscilloscope::GetTriggerSlope(EdgeTrigger* trig, string reply)
 {
 	reply = Trim(reply);
 
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			if(reply == "RISing")
-				trig->SetType(EdgeTrigger::EDGE_RISING);
-			else if(reply == "FALLing")
-				trig->SetType(EdgeTrigger::EDGE_FALLING);
-			else if(reply == "ALTernate")
-				trig->SetType(EdgeTrigger::EDGE_ANY);
-			else
-				LogWarning("Unknown trigger slope %s\n", reply.c_str());
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	if(reply == "RISing")
+		trig->SetType(EdgeTrigger::EDGE_RISING);
+	else if(reply == "FALLing")
+		trig->SetType(EdgeTrigger::EDGE_FALLING);
+	else if(reply == "ALTernate")
+		trig->SetType(EdgeTrigger::EDGE_ANY);
+	else
+		LogWarning("Unknown trigger slope %s\n", reply.c_str());
 }
 
 /**
@@ -2108,26 +1641,12 @@ void SiglentMinOscilloscope::PushTrigger()
 {
 	auto et = dynamic_cast<EdgeTrigger*>(m_trigger);
 	//auto pt = dynamic_cast<PulseWidthTrigger*>(m_trigger);
-	switch(m_modelid)
+	//if(pt) ...
+	if(et)	   //must be last
 	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			//if(pt) ...
-			if(et)	   //must be last
-			{
-				sendOnly(":TRIGGER:TYPE EDGE");
-				sendOnly(":TRIGGER:EDGE:SOURCE %s", m_trigger->GetInput(0).m_channel->GetHwname().c_str());
-				PushEdgeTrigger(et);
-			}
-
-			else
-				LogWarning("Unknown trigger type (not an edge)\n");
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
+		sendOnly(":TRIGGER:TYPE EDGE");
+		sendOnly(":TRIGGER:EDGE:SOURCE %s", m_trigger->GetInput(0).m_channel->GetHwname().c_str());
+		PushEdgeTrigger(et);
 	}
 }
 
@@ -2136,38 +1655,29 @@ void SiglentMinOscilloscope::PushTrigger()
  */
 void SiglentMinOscilloscope::PushEdgeTrigger(EdgeTrigger* trig)
 {
-	switch(m_modelid)
+	if(m_modelid != MODEL_SIGLENT_SDS2000XP)
+		return;
+
+	switch(trig->GetType())
 	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			switch(trig->GetType())
-			{
-				case EdgeTrigger::EDGE_RISING:
-					sendOnly(":TRIGGER:EDGE:SLOPE RISING");
-					break;
-
-				case EdgeTrigger::EDGE_FALLING:
-					sendOnly(":TRIGGER:EDGE:SLOPE FALLING");
-					break;
-
-				case EdgeTrigger::EDGE_ANY:
-					sendOnly(":TRIGGER:EDGE:SLOPE ALTERNATE");
-					break;
-
-				default:
-					LogWarning("Invalid trigger type %d\n", trig->GetType());
-					break;
-			}
-			//Level
-			sendOnly(":TRIGGER:EDGE:LEVEL %1.2E", trig->GetLevel());
+		case EdgeTrigger::EDGE_RISING:
+			sendOnly(":TRIGGER:EDGE:SLOPE RISING");
 			break;
 
-		// --------------------------------------------------
+		case EdgeTrigger::EDGE_FALLING:
+			sendOnly(":TRIGGER:EDGE:SLOPE FALLING");
+			break;
+
+		case EdgeTrigger::EDGE_ANY:
+			sendOnly(":TRIGGER:EDGE:SLOPE ALTERNATE");
+			break;
+
 		default:
-			LogError("Unknown scope type\n");
+			LogWarning("Invalid trigger type %d\n", trig->GetType());
 			break;
-			// --------------------------------------------------
 	}
+	//Level
+	sendOnly(":TRIGGER:EDGE:LEVEL %1.2E", trig->GetLevel());
 }
 
 /**
@@ -2176,17 +1686,6 @@ void SiglentMinOscilloscope::PushEdgeTrigger(EdgeTrigger* trig)
 vector<string> SiglentMinOscilloscope::GetTriggerTypes()
 {
 	vector<string> ret;
-	switch(m_modelid)
-	{
-		// --------------------------------------------------
-		case MODEL_SIGLENT_SDS2000XP:
-			ret.push_back(EdgeTrigger::GetTriggerName());
-			break;
-		// --------------------------------------------------
-		default:
-			LogError("Unknown scope type\n");
-			break;
-			// --------------------------------------------------
-	}
+	ret.push_back(EdgeTrigger::GetTriggerName());
 	return ret;
 }
